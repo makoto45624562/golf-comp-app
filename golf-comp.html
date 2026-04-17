@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ゴルフコンペ 集計システム</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --green: #1a6b3c; --green-light: #2d9b5a; --green-dark: #0f3d22;
+    --gold: #c9a84c; --gold-light: #e8c96a; --cream: #f5f0e8;
+    --dark: #1a1a1a; --gray: #888; --border: #d4c9b0;
+    --red: #c0392b; --blue: #2471a3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Noto Sans JP', sans-serif; background: #f0ebe0; color: var(--dark); min-height: 100vh; }
+
+  header { background: var(--green-dark); padding: 16px 32px; display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid var(--gold); }
+  header h1 { font-family: 'Bebas Neue', sans-serif; color: var(--gold); font-size: 2rem; letter-spacing: 3px; }
+  header span { color: #aaa; font-size: 0.75rem; }
+
+  .tabs { display: flex; background: var(--green-dark); padding: 0 32px; gap: 4px; }
+  .tab { padding: 10px 28px; cursor: pointer; font-size: 0.85rem; font-weight: 500; color: #aaa; border-radius: 6px 6px 0 0; transition: all 0.2s; border: none; background: none; font-family: 'Noto Sans JP', sans-serif; }
+  .tab.active { background: #f0ebe0; color: var(--green-dark); font-weight: 700; }
+  .tab:hover:not(.active) { color: var(--gold); }
+
+  main { max-width: none; margin: 0; padding: 16px 8px 60px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .card { background: white; border-radius: 10px; border: 1px solid var(--border); padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .card-title { font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--green); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+  /* ❶ カードアクセント */
+  .card-red { border-top: 4px solid var(--red); }
+  .card-red .card-title { color: var(--red); border-bottom-color: #fdecea; }
+  .card-gold { border-top: 4px solid var(--gold); }
+  .card-gold .card-title { color: #8a6000; border-bottom-color: #f5e9c0; }
+
+  .setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .setup-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  label { display: block; font-size: 0.78rem; font-weight: 500; color: var(--gray); margin-bottom: 5px; }
+  /* ❶ マイナスラベル */
+  label.lbl-minus { color: var(--red); }
+  label.lbl-minus::before { content: '− '; font-weight: 700; }
+  input[type=text], input[type=number], select { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-family: 'Noto Sans JP', sans-serif; font-size: 0.88rem; background: var(--cream); transition: border 0.2s; }
+  input:focus, select:focus { outline: none; border-color: var(--green); background: white; }
+
+  .members-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .members-table th { background: var(--green-dark); color: white; padding: 9px 12px; text-align: left; font-weight: 500; font-size: 0.75rem; letter-spacing: 1px; }
+  .members-table td { padding: 7px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .members-table tr:hover td { background: #fafaf5; }
+
+  .btn { padding: 10px 22px; border: none; border-radius: 6px; cursor: pointer; font-family: 'Noto Sans JP', sans-serif; font-size: 0.85rem; font-weight: 700; transition: all 0.15s; }
+  .btn-green { background: var(--green); color: white; }
+  .btn-green:hover { background: var(--green-light); }
+  .btn-gold { background: var(--gold); color: var(--dark); }
+  .btn-gold:hover { background: var(--gold-light); }
+  .btn-sm { padding: 5px 12px; font-size: 0.75rem; }
+  .btn-danger { background: #fdecea; color: var(--red); border: 1px solid #f5c6c2; }
+  .btn-danger:hover { background: #f5c6c2; }
+
+  .hidden-holes-selector { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .hole-chip { width: 42px; height: 42px; border-radius: 50%; border: 2px solid var(--border); background: white; cursor: pointer; font-size: 0.82rem; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all 0.15s; color: var(--dark); }
+  .hole-chip:hover { border-color: var(--green); }
+  .hole-chip.sel-out { background: var(--green); color: white; border-color: var(--green); }
+  .hole-chip.sel-in { background: var(--blue); color: white; border-color: var(--blue); }
+  .hole-section-label { font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--gray); padding: 6px 0 4px; border-bottom: 1px solid #eee; margin-bottom: 8px; }
+
+  /* ❺ hj-table サイズ調整 */
+  .hj-table { width: 100%; border-collapse: collapse; font-size: 0.60rem; table-layout: fixed; }
+  .hj-table th { background: var(--green-dark); color: white; padding: 5px 2px; text-align: center; font-size: 0.65rem; font-weight: 500; white-space: nowrap; }
+  .hj-table th.name-h { text-align: left; padding-left: 6px; width: 72px; font-size: 0.65rem; }
+  .hj-table td { padding: 2px 0; border-bottom: 1px solid #eee; text-align: center; vertical-align: middle; }
+  .hj-table .name-cell { text-align: left; font-weight: 700; font-size: 0.95rem; padding-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 72px; }
+  .hj-table input.score-inp { width: 38px; padding: 3px 2px; text-align: center; font-size: 0.78rem; border: 1px solid var(--border); border-radius: 3px; }
+  .hj-table input.par-inp { width: 26px; padding: 2px 1px; text-align: center; font-size: 0.85rem; border: 1px solid #aac8aa; border-radius: 3px; background: #e0f0e0; color: #1a5a1a; font-weight: 700; }
+  .hj-table input.decl-inp { width: 28px; padding: 2px 0; text-align: center; font-size: 0.60rem; border: 1px solid #c8c0aa; border-radius: 3px; background: #fefaf0; color: #4a3800; font-weight: 700; }
+  .hj-table input:focus { outline: none; border-color: var(--green); background: #f0fff6; }
+  .th-hidden { background: #1a5c38 !important; }
+  .td-hidden { background: #e2f5eb !important; }
+  .td-hidden input { background: #d4ede0; }
+  .th-sub { background: #0a2e18 !important; }
+  .td-sub { background: #0f3d22 !important; color: white !important; font-weight: 700; font-size: 1.1rem; }
+  .th-total { background: #071a0d !important; }
+  .td-total { background: #071a0d !important; color: var(--gold) !important; font-weight: 700; font-size: 1.2rem; }
+  .th-adj { background: #4a3800 !important; }
+  .td-adj { background: #fef9e7 !important; font-weight: 700; color: #4a3800; font-size: 1.1rem; }
+  .th-decl { background: #7d5a00 !important; }
+  .td-decl { background: #fffbe6 !important; font-weight: 700; color: #5a3a00; }
+  .th-diff { background: #2a2a2a !important; }
+  .td-diff { background: #f8f8f6 !important; }
+  .par-row td { background: #e5f0e5 !important; color: #2a5a2a; font-weight: 700; font-size: 0.85rem; }
+
+  .diff-plus { color: var(--red); font-weight: 700; }
+  .diff-minus { color: var(--blue); font-weight: 700; }
+  .diff-zero { color: var(--green); font-weight: 700; }
+
+  .alert { padding: 12px 16px; border-radius: 7px; font-size: 0.83rem; margin-bottom: 14px; line-height: 1.6; }
+  .alert-info { background: #e8f4fd; color: #154360; border-left: 3px solid #2471a3; }
+  .alert-warn { background: #fef9e7; color: #7d6608; border-left: 3px solid var(--gold); }
+  .alert-green { background: #e8f5ee; color: var(--green-dark); border-left: 3px solid var(--green); }
+
+  .toggle { position: relative; width: 40px; height: 22px; display: inline-block; }
+  .toggle input { display: none; }
+  .toggle-slider { position: absolute; inset: 0; background: #ccc; border-radius: 22px; cursor: pointer; transition: 0.2s; }
+  .toggle-slider:before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+  .toggle input:checked + .toggle-slider { background: var(--green); }
+  .toggle input:checked + .toggle-slider:before { transform: translateX(18px); }
+
+  .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .section-actions { display: flex; gap: 10px; margin-top: 18px; }
+  select.small-select { width: auto; font-size: 0.8rem; padding: 5px 8px; }
+
+  .olympic-input-table { width: 100%; border-collapse: collapse; }
+  .olympic-input-table th { background: #0f2040; color: white; padding: 11px 16px; text-align: left; font-size: 0.75rem; font-weight: 600; letter-spacing: 1px; }
+  .olympic-input-table td { padding: 10px 16px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  .olympic-input-table tr:hover td { background: #f8f8f5; }
+  .olympic-input-table input { width: 80px; padding: 7px; text-align: center; font-size: 1rem; }
+  .net-pts { font-family: 'Bebas Neue', sans-serif; font-size: 1.8rem; }
+
+  .results-section { margin-bottom: 28px; }
+  .results-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; letter-spacing: 2px; color: var(--green-dark); margin-bottom: 14px; display: flex; align-items: center; gap: 12px; }
+  .results-title::after { content: ''; flex: 1; height: 2px; background: linear-gradient(to right, var(--green), transparent); }
+  .rank-table { width: 100%; border-collapse: collapse; }
+  .rank-table th { padding: 9px 14px; font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; color: var(--gray); border-bottom: 2px solid var(--border); text-align: left; }
+  .rank-table td { padding: 11px 14px; border-bottom: 1px solid #eee; font-size: 0.88rem; }
+  .rank-badge { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; font-weight: 700; font-size: 0.85rem; }
+  .r1 { background: #ffd700; color: #5a3e00; } .r2 { background: #c0c0c0; color: #333; }
+  .r3 { background: #cd7f32; color: white; } .rx { background: #eee; color: #555; }
+  .pb { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
+  .pb-1 { background: #ffd700; color: #5a3e00; } .pb-2 { background: #e8e8e8; color: #444; }
+  .pb-3 { background: #f4dcc8; color: #7a4500; } .pb-bg { background: #e8f5ee; color: var(--green-dark); }
+  .pb-bo { background: #fdecea; color: var(--red); } .pb-bm { background: #fff3e0; color: #e65100; }
+  .mvnd { font-size: 0.78rem; color: var(--gray); margin-left: 6px; }
+  .mvnd strong { color: var(--green); font-size: 0.9rem; }
+
+  @media print { header,.tabs,.section-actions,.btn{display:none!important} .page{display:block!important} }
+
+  /* ===== MOBILE ===== */
+  @media (max-width: 640px) {
+    header { padding: 10px 14px; }
+    header h1 { font-size: 1.3rem; letter-spacing: 1px; }
+    header span { font-size: 0.68rem; }
+
+    /* タブ: 横スクロール */
+    .tabs { padding: 0 6px; overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { padding: 10px 14px; font-size: 0.78rem; white-space: nowrap; flex-shrink: 0; }
+
+    main { padding: 10px 8px 80px; }
+
+    /* カード余白を縮小 */
+    .card { padding: 14px 12px; margin-bottom: 14px; }
+    .card-title { margin-bottom: 12px; }
+
+    /* セットアップグリッドを1列化 */
+    .setup-grid { grid-template-columns: 1fr; gap: 14px; }
+    .setup-grid-3 { grid-template-columns: 1fr; gap: 14px; }
+
+    /* タッチターゲット確保 */
+    input[type=text], input[type=number], select { padding: 11px 12px; font-size: 0.95rem; }
+    .btn { padding: 13px 20px; font-size: 0.88rem; }
+    .btn-sm { padding: 9px 14px; font-size: 0.78rem; }
+
+    /* ホールチップ */
+    .hole-chip { width: 38px; height: 38px; font-size: 0.78rem; }
+    .hidden-holes-selector { gap: 6px; }
+
+    /* HJ テーブルのスコア入力幅を微調整 */
+    .hj-table input.score-inp { width: 32px; font-size: 0.72rem; }
+    .hj-table input.par-inp { width: 22px; }
+    .hj-table input.decl-inp { width: 24px; }
+
+    /* メンバーテーブル横スクロール */
+    .members-table th, .members-table td { padding: 8px 8px; }
+
+    /* ランキングテーブル横スクロール */
+    .rank-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .rank-table th, .rank-table td { padding: 8px 10px; font-size: 0.82rem; white-space: nowrap; }
+    .rank-badge { width: 26px; height: 26px; font-size: 0.78rem; }
+
+    /* オリンピック入力カード */
+    .olympic-input-table td, .olympic-input-table th { padding: 8px 10px; }
+
+    /* セクションアクション */
+    .section-actions { flex-wrap: wrap; gap: 8px; }
+    .flex-between { flex-wrap: wrap; gap: 8px; }
+  }
+
+  /* さらに小さい画面 (≤ 380px) */
+  @media (max-width: 380px) {
+    header h1 { font-size: 1.1rem; }
+    .tab { padding: 9px 11px; font-size: 0.73rem; }
+    .hj-table { font-size: 0.55rem; }
+    .hj-table th { font-size: 0.58rem; }
+    .hj-table input.score-inp { width: 28px; font-size: 0.65rem; }
+    .card { padding: 12px 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⛳ GOLF COMP MANAGER</h1>
+  <span id="compTitle">コンペ名未設定</span>
+</header>
+
+<!-- ❹ タブは3つのみ -->
+<div class="tabs">
+  <button class="tab active" onclick="showPage('setup')">① メンバー設定</button>
+  <button class="tab" onclick="showPage('honest')">② オネストジョン</button>
+  <button class="tab" onclick="showPage('olympic')">③ オリンピック</button>
+</div>
+
+<main>
+
+<!-- ===== SETUP ===== -->
+<div id="page-setup" class="page active">
+  <!-- ❶ 基本設定 ＋ 罰金設定(赤) 2列 -->
+  <div class="setup-grid" style="margin-bottom:20px">
+    <div class="card">
+      <div class="card-title">コンペ基本設定</div>
+      <div style="margin-bottom:14px"><label>コンペ名</label><input type="text" id="compName" placeholder="例: 第5回 ゴルフコンペ" oninput="updateTitle()"></div>
+      <div style="margin-bottom:14px"><label>開催日</label><input type="text" id="compDate" placeholder="例: 2025年5月25日"></div>
+      <div><label>コース名</label><input type="text" id="compCourse" placeholder="例: Long Thanh Golf Club"></div>
+    </div>
+    <div class="card card-red">
+      <div class="card-title">罰金設定（VND）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><label class="lbl-minus">1打オーバー罰金</label><input type="text" id="pen_over" value="10,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+        <div><label class="lbl-minus">1打アンダー罰金</label><input type="text" id="pen_under" value="50,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+        <div style="grid-column:1/-1"><label class="lbl-minus">罰金上限</label><input type="text" id="pen_cap" value="300,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      </div>
+    </div>
+  </div>
+  <!-- ❶ 賞金設定(金) 全幅 -->
+  <div class="card card-gold">
+    <div class="card-title">賞金設定（VND）</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+      <div><label>1位</label><input type="text" id="prize1" value="500,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>2位</label><input type="text" id="prize2" value="300,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>3位</label><input type="text" id="prize3" value="100,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>ベスグロ</label><input type="text" id="prizeBG" value="300,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>ブービー</label><input type="text" id="prizeBooby" value="200,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>ブービーメーカー</label><input type="text" id="prizeBM" value="100,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>ニアピン（1ホール）</label><input type="text" id="prizeNP" value="150,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>ニアピン対象ホール数</label><input type="number" id="npHoles" value="4" min="1" max="18"></div>
+      <div><label>ドラコン（1ホール）</label><input type="text" id="prizeDC" value="150,000" oninput="fmtInput(this)" inputmode="numeric"></div>
+      <div><label>ドラコン対象ホール数</label><input type="number" id="dcHoles" value="4" min="1" max="18"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="flex-between">
+      <div class="card-title" style="margin-bottom:0">参加メンバー（最大16名）</div>
+      <button class="btn btn-green btn-sm" onclick="addMember()">＋ メンバー追加</button>
+    </div>
+    <div style="margin-top:14px;overflow-x:auto">
+      <table class="members-table">
+        <thead><tr><th>#</th><th>名前</th><th>組</th><th>申告スコア</th><th>オリンピック参加</th><th></th></tr></thead>
+        <tbody id="membersTbody"></tbody>
+      </table>
+    </div>
+    <div class="section-actions">
+      <button class="btn btn-gold" onclick="applySetup()">✓ この設定で次へ</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HONEST JOHN ===== -->
+<div id="page-honest" class="page">
+  <div class="card">
+    <div class="card-title">隠しホール設定（サイコロ結果を入力）</div>
+    <div class="alert alert-green">
+      <strong>【隠しホールルール】</strong> 選択されたホールは、実際のスコアに関わらず<strong>パー打数として計算</strong>されます。6打叩いても（Par5なら）5打扱いになるため、大叩きのホールが隠しホールだとラッキーです。
+    </div>
+    <div style="margin-bottom:14px">
+      <div class="hole-section-label">OUT（1〜9番）— <span id="outCount">0</span>/3 選択</div>
+      <div class="hidden-holes-selector" id="outHoles"></div>
+    </div>
+    <div>
+      <div class="hole-section-label">IN（10〜18番）— <span id="inCount">0</span>/3 選択</div>
+      <div class="hidden-holes-selector" id="inHoles"></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">スコア入力 ── Tabキーで次のホールへ移動できます</div>
+    <div class="alert alert-info">
+      🟩 緑のセルが隠しホールです。入力した実スコアは記録されますが、<strong>集計時はパー打数に置き換えられます</strong>。全員のスコアが揃うと自動でランキングを表示します。
+    </div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+      <table class="hj-table" id="hjTable"></table>
+    </div>
+  </div>
+  <!-- ❸ リアルタイムランキング表示エリア -->
+  <div id="hjRanking"></div>
+</div>
+
+<!-- ===== OLYMPIC ===== -->
+<div id="page-olympic" class="page">
+  <div class="card">
+    <div class="card-title">ポイント入力 ── メンバーの獲得ポイントを入力してください</div>
+    <div class="alert alert-info">各自の獲得ポイントを入力（マイナスも可）。ポイント × 10,000ドンが賞金/罰金になります。</div>
+    <div id="olympicInputArea"></div>
+  </div>
+  <!-- リアルタイムランキング -->
+  <div id="olympicRanking"></div>
+</div>
+
+</main>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let members = [];
+let hjHidden = { out: [], in: [] };
+let hjScores = {};
+let olympicData = {};
+let mc = 0;
+
+let PAR = [4,3,4,5,4,3,4,5,4, 4,3,4,5,4,3,4,5,4];
+
+function getParFromInputs(){
+  for(let h=1;h<=18;h++){
+    const el=document.getElementById('par_h'+h);
+    if(el && el.value) PAR[h-1]=+el.value||PAR[h-1];
+  }
+}
+
+function fmt(n){ return Math.round(Number(n)).toLocaleString('en-US'); }
+function fmtInput(el){
+  const raw=el.value.replace(/[^0-9]/g,'');
+  const pos=el.selectionStart;
+  const oldLen=el.value.length;
+  el.value=raw?Number(raw).toLocaleString('en-US'):'';
+  const diff=el.value.length-oldLen;
+  try{ el.setSelectionRange(pos+diff,pos+diff); }catch(e){}
+}
+function getRaw(id){ return parseInt((document.getElementById(id).value||'').replace(/,/g,''),10)||0; }
+function updateTitle(){ document.getElementById('compTitle').textContent = document.getElementById('compName').value || 'コンペ名未設定'; }
+
+// ❹ タブは3つのみ
+function showPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const map={setup:0,honest:1,olympic:2};
+  document.querySelectorAll('.tab')[map[p]].classList.add('active');
+}
+
+// ============================================================
+// SETUP
+// ============================================================
+function onParInput(){
+  for(let h=1;h<=18;h++){
+    const el=document.getElementById('par_h'+h);
+    if(el) PAR[h-1]=+el.value||PAR[h-1];
+  }
+  const po=PAR.slice(0,9).reduce((a,b)=>a+b,0);
+  const pi=PAR.slice(9).reduce((a,b)=>a+b,0);
+  const ps=document.getElementById('parOut_sum');
+  const psi=document.getElementById('parIn_sum');
+  const pst=document.getElementById('parTotal_sum');
+  if(ps) ps.textContent=po;
+  if(psi) psi.textContent=pi;
+  if(pst) pst.textContent=po+pi;
+  members.forEach(m=>updateHjRow(m.id));
+}
+
+function addMember(){
+  if(members.length>=16){alert('最大16名です');return;}
+  mc++;
+  members.push({id:'M'+mc, name:'', group:1, declared:90, olympic:true});
+  renderMembers();
+}
+function removeMember(id){ members=members.filter(m=>m.id!==id); renderMembers(); }
+function renderMembers(){
+  const tb=document.getElementById('membersTbody');
+  tb.innerHTML='';
+  members.forEach((m,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td style="color:var(--gray);font-size:0.8rem">${i+1}</td>
+      <td><input type="text" value="${m.name}" placeholder="名前" onchange="members[${i}].name=this.value.trim()||'メンバー${i+1}'"></td>
+      <td><select class="small-select" onchange="members[${i}].group=+this.value">
+        <option ${m.group==1?'selected':''}>1</option><option ${m.group==2?'selected':''}>2</option>
+        <option ${m.group==3?'selected':''}>3</option><option ${m.group==4?'selected':''}>4</option>
+      </select></td>
+      <td><input type="number" value="${m.declared}" min="60" max="150" onchange="members[${i}].declared=+this.value" style="width:80px"></td>
+      <td><label class="toggle"><input type="checkbox" ${m.olympic?'checked':''} onchange="members[${i}].olympic=this.checked"><span class="toggle-slider"></span></label></td>
+      <td><button class="btn btn-danger btn-sm" onclick="removeMember('${m.id}')">削除</button></td>`;
+    tb.appendChild(tr);
+  });
+}
+function applySetup(){
+  const rows=document.getElementById('membersTbody').querySelectorAll('tr');
+  rows.forEach((tr,i)=>{
+    const ins=tr.querySelectorAll('input,select');
+    members[i].name=ins[0].value.trim()||`メンバー${i+1}`;
+    members[i].group=+ins[1].value;
+    members[i].declared=+ins[2].value||90;
+    members[i].olympic=ins[3].checked;
+  });
+  if(members.length===0){alert('メンバーを追加してください');return;}
+  buildHonestPage();
+  buildOlympicPage();
+  showPage('honest');
+}
+
+// ============================================================
+// HONEST JOHN
+// ============================================================
+function buildHonestPage(){
+  ['out','in'].forEach(side=>{
+    const div=document.getElementById(side+'Holes');
+    div.innerHTML='';
+    const start=side==='out'?1:10;
+    for(let h=start;h<start+9;h++){
+      const btn=document.createElement('button');
+      btn.className='hole-chip'+(hjHidden[side].includes(h)?' sel-'+side:'');
+      btn.textContent=h;
+      btn.onclick=()=>toggleHole(btn,h,side);
+      div.appendChild(btn);
+    }
+  });
+  buildHjTable();
+}
+
+function toggleHole(chip,h,side){
+  const arr=hjHidden[side];
+  if(arr.includes(h)){
+    hjHidden[side]=arr.filter(x=>x!==h);
+    chip.classList.remove('sel-out','sel-in');
+  } else {
+    if(arr.length>=3) return;
+    hjHidden[side].push(h);
+    chip.classList.add('sel-'+side);
+  }
+  document.getElementById('outCount').textContent=hjHidden.out.length;
+  document.getElementById('inCount').textContent=hjHidden.in.length;
+  buildHjTable();
+}
+
+function buildHjTable(){
+  const tbl=document.getElementById('hjTable');
+  const hidden=[...hjHidden.out,...hjHidden.in];
+
+  let head='<thead><tr><th class="name-h">名前</th>';
+  for(let h=1;h<=9;h++) head+=`<th class="${hidden.includes(h)?'th-hidden':''}">${h}</th>`;
+  head+='<th class="th-sub">OUT</th>';
+  for(let h=10;h<=18;h++) head+=`<th class="${hidden.includes(h)?'th-hidden':''}">${h}</th>`;
+  head+='<th class="th-sub">IN</th><th class="th-total">TOTAL</th>';
+  head+='<th class="th-adj" title="隠しホール→パー固定の調整後スコア">調整後</th>';
+  head+='<th class="th-decl" style="min-width:32px">申告スコア</th>';
+  head+='<th class="th-diff">誤差</th><th class="th-diff">罰金</th>';
+  head+='</tr>';
+
+  // PAR行
+  head+='<tr class="par-row"><td class="name-cell" style="font-size:0.75rem;color:#3a6a3a;padding-left:6px">PAR</td>';
+  for(let h=1;h<=9;h++) head+=`<td><input id="par_h${h}" class="par-inp" type="number" min="3" max="6" value="${PAR[h-1]}" oninput="onParInput()"></td>`;
+  head+=`<td id="parOut_sum" class="td-sub" style="font-size:0.80rem">${PAR.slice(0,9).reduce((a,b)=>a+b,0)}</td>`;
+  for(let h=10;h<=18;h++) head+=`<td><input id="par_h${h}" class="par-inp" type="number" min="3" max="6" value="${PAR[h-1]}" oninput="onParInput()"></td>`;
+  head+=`<td id="parIn_sum" class="td-sub" style="font-size:0.80rem">${PAR.slice(9).reduce((a,b)=>a+b,0)}</td>`;
+  head+=`<td id="parTotal_sum" class="td-total" style="font-size:0.80rem">${PAR.reduce((a,b)=>a+b,0)}</td>`;
+  head+='<td class="td-adj" style="font-size:0.70rem">—</td>';
+  head+='<td class="td-decl" style="font-size:0.70rem">申告スコア</td>';
+  head+='<td class="td-diff">—</td><td class="td-diff">—</td></tr></thead>';
+
+  let body='<tbody>';
+  members.forEach((m,mi)=>{
+    if(!hjScores[m.id]) hjScores[m.id]={};
+    body+=`<tr id="hjRow_${m.id}"><td class="name-cell">${m.name}</td>`;
+    for(let h=1;h<=18;h++){
+      const isH=hidden.includes(h);
+      const val=hjScores[m.id][h]||'';
+      const ti=mi*18+h;
+      body+=`<td class="${isH?'td-hidden':''}">
+        <input class="score-inp" type="number" min="1" max="15" value="${val}" tabindex="${ti}"
+          data-member="${m.id}" data-hole="${h}"
+          oninput="onHjInput(this)">
+      </td>`;
+      if(h===9) body+=`<td class="td-sub" id="hjOut_${m.id}">—</td>`;
+    }
+    body+=`<td class="td-sub" id="hjIn_${m.id}">—</td>`;
+    body+=`<td class="td-total" id="hjTotal_${m.id}">—</td>`;
+    body+=`<td class="td-adj" id="hjAdj_${m.id}">—</td>`;
+    body+=`<td class="td-decl">${m.declared}</td>`;
+    body+=`<td class="td-diff" id="hjDiff_${m.id}">—</td>`;
+    body+=`<td class="td-diff" id="hjCost_${m.id}">—</td>`;
+    body+='</tr>';
+  });
+  body+='</tbody>';
+  tbl.innerHTML=head+body;
+}
+
+function onHjInput(inp){
+  hjScores[inp.dataset.member][+inp.dataset.hole]=+inp.value||0;
+  updateHjRow(inp.dataset.member);
+}
+
+function updateHjRow(id){
+  getParFromInputs();
+  const s=hjScores[id]||{};
+  const hidden=[...hjHidden.out,...hjHidden.in];
+  let out=0,inS=0,adj=0;
+  let allOut=true,allIn=true,allFilled=true;
+  for(let h=1;h<=9;h++){ if(!s[h]){allOut=false;allFilled=false;} out+=s[h]||0; }
+  for(let h=10;h<=18;h++){ if(!s[h]){allIn=false;allFilled=false;} inS+=s[h]||0; }
+  for(let h=1;h<=18;h++){
+    adj+= hidden.includes(h) ? PAR[h-1] : (s[h]||0);
+  }
+  const el=id2=>document.getElementById(id2);
+  el('hjOut_'+id).textContent=allOut?out:'—';
+  el('hjIn_'+id).textContent=allIn?inS:'—';
+  if(allFilled){
+    el('hjTotal_'+id).textContent=out+inS;
+    el('hjAdj_'+id).textContent=adj;
+    const m=members.find(x=>x.id===id);
+    if(m&&m.declared){
+      const diff=adj-m.declared;
+      const po=getRaw('pen_over');
+      const pu=getRaw('pen_under');
+      const cap=getRaw('pen_cap');
+      let cost=0;
+      if(diff>0) cost=Math.min(diff*po,cap);
+      else if(diff<0) cost=Math.min(Math.abs(diff)*pu,cap);
+      const cls=diff>0?'diff-plus':diff<0?'diff-minus':'diff-zero';
+      el('hjDiff_'+id).innerHTML=`<span class="${cls}">${diff>0?'+':''}${diff}</span>`;
+      const underMark=diff<0?' <small style="color:var(--blue)">(アンダー)</small>':'';
+      el('hjCost_'+id).innerHTML=cost>0?fmt(cost)+underMark:'-';
+    }
+  } else {
+    el('hjTotal_'+id).textContent='—';
+    el('hjAdj_'+id).textContent='—';
+    el('hjDiff_'+id).textContent='—';
+    el('hjCost_'+id).textContent='—';
+  }
+  // ❸ 自動ランキング更新
+  renderHjRanking();
+}
+
+// ❸ オネストジョン リアルタイムランキング
+function renderHjRanking(){
+  const div=document.getElementById('hjRanking');
+  if(!div) return;
+  getParFromInputs();
+  const hidden=[...hjHidden.out,...hjHidden.in];
+  const po=getRaw('pen_over'), pu=getRaw('pen_under'), cap=getRaw('pen_cap');
+
+  const rows=members.map(m=>{
+    const s=hjScores[m.id]||{};
+    let total=0,adj=0,complete=true;
+    for(let h=1;h<=18;h++){
+      if(!s[h]) complete=false;
+      total+=s[h]||0;
+      adj+=hidden.includes(h)?PAR[h-1]:(s[h]||0);
+    }
+    const diff=adj-(m.declared||0);
+    let cost=0;
+    if(diff>0) cost=Math.min(diff*po,cap);
+    else if(diff<0) cost=Math.min(Math.abs(diff)*pu,cap);
+    return {member:m,total,adj,diff,cost,complete,under:diff<0};
+  });
+
+  const complete=rows.filter(r=>r.complete);
+  if(complete.length===0){ div.innerHTML=''; return; }
+
+  const sorted=[...complete].sort((a,b)=>a.cost-b.cost||((a.diff>=0?0:1)-(b.diff>=0?0:1)));
+  const allDone=(complete.length===members.length);
+
+  let html=`<div class="card results-section">
+    <div class="results-title">オネストジョン ランキング（${complete.length}/${members.length}名完了）</div>
+    <div class="rank-table-wrap"><table class="rank-table"><thead><tr>
+      <th>順位</th><th>名前</th><th>申告</th><th>グロス</th>
+      <th>調整後</th><th>誤差</th><th>罰金(VND)</th>
+    </tr></thead><tbody>`;
+
+  sorted.forEach((r,i)=>{
+    const diff=r.diff;
+    const cls=diff>0?'diff-plus':diff<0?'diff-minus':'diff-zero';
+    const badge=`<span class="rank-badge ${i<3?'r'+(i+1):'rx'}">${i+1}</span>`;
+    const underMark=diff<0?' <small style="color:var(--blue)">(アンダー)</small>':'';
+    html+=`<tr>
+      <td>${badge}</td><td><strong>${r.member.name}</strong></td>
+      <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
+      <td><span class="${cls}">${diff>0?'+':''}${diff}</span></td>
+      <td>${r.cost>0?fmt(r.cost)+underMark:'-'}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div>`;
+
+  if(allDone){
+    const byTotal=[...complete].sort((a,b)=>a.total-b.total);
+    const bestGros=byTotal[0];
+    const byGross=[...complete].sort((a,b)=>b.total-a.total);
+    const boobyMaker=byGross[0], booby=byGross[1];
+    const p1=getRaw('prize1'),p2=getRaw('prize2'),p3=getRaw('prize3');
+    const pBG=getRaw('prizeBG'),pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM');
+    const pNP=getRaw('prizeNP'),npH=+document.getElementById('npHoles').value||4;
+    const pDC=getRaw('prizeDC'),dcH=+document.getElementById('dcHoles').value||4;
+
+    html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div><div class="rank-table-wrap"><table class="rank-table"><tbody>`;
+    if(sorted[0]) html+=`<tr><td><span class="pb pb-1">🥇 1位</span> <strong>${sorted[0].member.name}</strong></td><td class="mvnd">+<strong>${fmt(p1)}</strong> VND</td></tr>`;
+    if(sorted[1]) html+=`<tr><td><span class="pb pb-2">🥈 2位</span> <strong>${sorted[1].member.name}</strong></td><td class="mvnd">+<strong>${fmt(p2)}</strong> VND</td></tr>`;
+    if(sorted[2]) html+=`<tr><td><span class="pb pb-3">🥉 3位</span> <strong>${sorted[2].member.name}</strong></td><td class="mvnd">+<strong>${fmt(p3)}</strong> VND</td></tr>`;
+    if(bestGros) html+=`<tr><td><span class="pb pb-bg">🏆 ベスグロ</span> <strong>${bestGros.member.name}</strong>（グロス ${bestGros.total}打）</td><td class="mvnd">+<strong>${fmt(pBG)}</strong> VND</td></tr>`;
+    if(booby) html+=`<tr><td><span class="pb pb-bo">💀 ブービー</span> <strong>${booby.member.name}</strong>（${booby.total}打）</td><td class="mvnd">+<strong>${fmt(pBo)}</strong> VND</td></tr>`;
+    if(boobyMaker) html+=`<tr><td><span class="pb pb-bm">🐢 ブービーメーカー</span> <strong>${boobyMaker.member.name}</strong>（${boobyMaker.total}打）</td><td class="mvnd">+<strong>${fmt(pBM)}</strong> VND</td></tr>`;
+    html+=`<tr><td><span class="pb" style="background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span> 受賞者は当日発表（${npH}ホール）</td><td class="mvnd">合計 <strong>${fmt(pNP*npH)}</strong> VND</td></tr>`;
+    html+=`<tr><td><span class="pb" style="background:#fff3e0;color:#e65100">💨 ドラコン</span> 受賞者は当日発表（${dcH}ホール）</td><td class="mvnd">合計 <strong>${fmt(pDC*dcH)}</strong> VND</td></tr>`;
+    html+=`</tbody></table></div></div>`;
+  }
+
+  html+=`</div>`;
+  div.innerHTML=html;
+}
+
+// ============================================================
+// OLYMPIC
+// ============================================================
+function buildOlympicPage(){
+  const parts=members.filter(m=>m.olympic);
+  const area=document.getElementById('olympicInputArea');
+  if(!parts.length){
+    area.innerHTML='<p style="color:var(--gray);padding:20px;text-align:center">オリンピック参加者がいません</p>';
+    document.getElementById('olympicRanking').innerHTML='';
+    return;
+  }
+  parts.forEach(m=>{ if(!olympicData[m.id]) olympicData[m.id]={pts:0}; });
+
+  // 組順・メンバー順に横並び
+  let html='<div style="display:flex;flex-wrap:wrap;gap:16px;padding:4px 0">';
+  parts.forEach(m=>{
+    const val=(olympicData[m.id]||{}).pts||0;
+    html+=`<div style="display:flex;flex-direction:column;align-items:center;min-width:72px;background:#f8f8f5;border-radius:8px;padding:10px 8px;border:1px solid var(--border)">
+      <div style="font-weight:700;font-size:0.95rem;margin-bottom:8px;white-space:nowrap">${m.name}</div>
+      <input type="number" min="-999" max="999" value="${val}"
+        style="width:64px;text-align:center;font-size:1.1rem;font-weight:700;padding:6px 4px;border:2px solid var(--border);border-radius:6px;background:var(--cream)"
+        oninput="olympicData['${m.id}'].pts=+this.value;renderOlympicRanking()">
+    </div>`;
+  });
+  html+='</div>';
+  area.innerHTML=html;
+  renderOlympicRanking();
+}
+
+// オリンピック リアルタイムランキング
+function renderOlympicRanking(){
+  const div=document.getElementById('olympicRanking');
+  if(!div) return;
+  const parts=members.filter(m=>m.olympic);
+  if(!parts.length){ div.innerHTML=''; return; }
+
+  const n=parts.length;
+  // 参加者全員のポイント合計（オリンピッカー表示用）
+  const totalAll=parts.reduce((s,m)=>s+((olympicData[m.id]||{}).pts||0),0);
+
+  const rows=parts.map(m=>{
+    const pts=(olympicData[m.id]||{}).pts||0;
+    // 最終得点 = 自分のポイント×(n-1) − 他全員の合計
+    const score=pts*(n-1)-(totalAll-pts);
+    return {member:m, pts, score};
+  });
+  rows.sort((a,b)=>b.score-a.score);
+
+  let html=`<div class="card results-section">
+    <div class="results-title">オリンピック ランキング</div>
+    <div class="rank-table-wrap"><table class="rank-table"><thead><tr>
+      <th>順位</th><th>名前</th>
+      <th>獲得ポイント</th>
+      <th>最終得点</th>
+      <th>オリンピッカー<small style="display:block;font-size:0.7rem;font-weight:400;color:var(--gray)">参加者合計</small></th>
+      <th>賞金＆罰金(VND)</th>
+    </tr></thead><tbody>`;
+
+  rows.forEach((r,i)=>{
+    const badge=`<span class="rank-badge ${i<3?'r'+(i+1):'rx'}">${i+1}</span>`;
+    const money=r.score*10000;
+    let moneyCell;
+    if(money>0) moneyCell=`<span style="color:var(--green);font-weight:700">+${fmt(money)}</span>`;
+    else if(money<0) moneyCell=`<span style="color:var(--red);font-weight:700">−${fmt(Math.abs(money))}</span>`;
+    else moneyCell='—';
+    const scoreColor=r.score>0?'var(--green)':r.score<0?'var(--red)':'var(--gray)';
+    const scoreStr=r.score>0?`+${r.score}`:String(r.score);
+    html+=`<tr>
+      <td>${badge}</td>
+      <td><strong>${r.member.name}</strong></td>
+      <td><span class="net-pts" style="font-size:1.4rem;color:#0f2040">${r.pts}</span></td>
+      <td><span class="net-pts" style="font-size:1.4rem;color:${scoreColor}">${scoreStr}</span></td>
+      <td style="font-weight:700;color:#555;font-size:1.1rem">${totalAll}pt</td>
+      <td style="font-size:1rem">${moneyCell}</td>
+    </tr>`;
+  });
+  html+=`</tbody></table></div></div>`;
+  div.innerHTML=html;
+}
+
+// ============================================================
+// INIT
+// ============================================================
+for(let i=0;i<12;i++) addMember();
+</script>
+</body>
+</html>
