@@ -402,8 +402,53 @@ function applySetup(){
     members[i].olympic=ins[3].checked;
   });
   if(members.length===0){alert('メンバーを追加してください');return;}
+
+  // ① 現在のDOMからスコアを保存
+  members.forEach(m=>{
+    for(let h=1;h<=18;h++){
+      const el=document.querySelector(`input[data-member="${m.id}"][data-hole="${h}"]`);
+      if(el && el.value){
+        hjScores[m.id]=hjScores[m.id]||{};
+        hjScores[m.id][h]=+el.value;
+      }
+    }
+  });
+
+  // ② 現在のPARを保存
+  const savedPar=[...PAR];
+
+  // ③ ページ再構築
   buildHonestPage();
   buildOlympicPage();
+
+  // ④ DOM再構築後にスコア・PAR・オリンピックポイントを復元
+  setTimeout(()=>{
+    // PARを復元
+    savedPar.forEach((p,i)=>{
+      const el=document.getElementById('par_h'+(i+1));
+      if(el) el.value=p;
+    });
+    PAR=[...savedPar];
+
+    // スコアを復元して合計を再計算
+    members.forEach(m=>{
+      if(!hjScores[m.id]) return;
+      for(let h=1;h<=18;h++){
+        const el=document.querySelector(`input[data-member="${m.id}"][data-hole="${h}"]`);
+        if(el && hjScores[m.id][h]) el.value=hjScores[m.id][h];
+      }
+      updateHjRow(m.id);
+    });
+
+    // オリンピックポイントを復元
+    members.filter(m=>m.olympic).forEach(m=>{
+      if(!olympicData[m.id]) return;
+      const el=document.querySelector(`input[data-olympic-id="${m.id}"]`);
+      if(el) el.value=olympicData[m.id].pts||0;
+    });
+    renderOlympicRanking();
+  },100);
+
   showPage('honest');
 }
 
@@ -635,6 +680,7 @@ function buildOlympicPage(){
     html+=`<div style="display:flex;flex-direction:column;align-items:center;min-width:72px;background:#f8f8f5;border-radius:8px;padding:10px 8px;border:1px solid var(--border)">
       <div style="font-weight:700;font-size:0.95rem;margin-bottom:8px;white-space:nowrap">${m.name}</div>
       <input type="number" min="-999" max="999" value="${val}"
+        data-olympic-id="${m.id}"
         style="width:64px;text-align:center;font-size:1.1rem;font-weight:700;padding:6px 4px;border:2px solid var(--border);border-radius:6px;background:var(--cream)"
         oninput="olympicData['${m.id}'].pts=+this.value;renderOlympicRanking()">
     </div>`;
