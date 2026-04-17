@@ -659,12 +659,12 @@ function renderHjRanking(){
     const badge=isUnder
       ? `<span class="rank-badge" style="background:#1a4a8a;color:white;font-size:0.72rem">―</span>`
       : `<span class="rank-badge ${badgeCls}">${i+1}</span>`;
-    const diffBg=diff>0?'#c0392b':diff<0?'#1a4a8a':'#1a6b3c';
+    const diffColor=diff>0?'#c0392b':diff<0?'#2471a3':'#1a6b3c';
     html+=`<tr>
       <td>${badge}</td><td><strong>${r.member.name}</strong></td>
       <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
-      <td style="background:${diffBg};color:white;font-weight:700">${diff>0?'+':''}${diff}</td>
-      <td style="background:${diffBg};color:white;font-weight:700">${r.cost>0?fmt(r.cost):'-'}</td>
+      <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${diff>0?'+':''}${diff}</td>
+      <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${r.cost>0?fmt(r.cost):'-'}</td>
     </tr>`;
   });
 
@@ -685,15 +685,18 @@ function renderHjRanking(){
     for(let i=1;i<=npH;i++) npNames.push((document.getElementById(`np_name_${i}`)||{}).value||'');
     for(let i=1;i<=dcH;i++) dcNames.push((document.getElementById(`dc_name_${i}`)||{}).value||'');
 
-    html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div>`;
+    html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div>
+    <table style="border-collapse:collapse;width:100%"><tbody>`;
 
-    // 賞行（バッジ・名前・賞金を均等揃え）
+    // table形式の賞行ヘルパー
     const prizeRow=(badgeCls,label,name,money)=>
-      `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #eee">
-        <span class="pb ${badgeCls}" style="display:inline-block;width:180px;text-align:center;font-size:0.85rem;flex-shrink:0">${label}</span>
-        <strong style="min-width:120px;font-size:1rem">${name}</strong>
-        <span class="mvnd" style="margin-left:24px">+<strong>${fmt(money)}</strong> VND</span>
-      </div>`;
+      `<tr style="border-bottom:1px solid #eee">
+        <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:middle">
+          <span class="pb ${badgeCls}" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem">${label}</span>
+        </td>
+        <td style="width:160px;padding:8px 6px;font-weight:700;font-size:1rem;vertical-align:middle">${name}</td>
+        <td style="padding:8px 6px 8px 24px;text-align:right;white-space:nowrap;font-weight:700;vertical-align:middle">+<strong>${fmt(money)}</strong> VND</td>
+      </tr>`;
 
     if(eligible[0]) html+=prizeRow('pb-1','🥇 オネストジョン優勝',eligible[0].member.name,p1);
     if(eligible[1]) html+=prizeRow('pb-2','🥈 オネストジョン準優勝',eligible[1].member.name,p2);
@@ -703,36 +706,46 @@ function renderHjRanking(){
     if(boobyMaker)  html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${boobyMaker.member.name}（${boobyMaker.total}打）`,pBM);
 
     // ニアピン（ホール数分の手入力欄）
-    html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid #eee;flex-wrap:wrap">
-      <span class="pb" style="display:inline-block;width:180px;text-align:center;font-size:0.85rem;flex-shrink:0;background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span>
-      <div>
-        <span class="mvnd" style="display:block;margin-bottom:6px">1ホール +<strong>${fmt(pNP)}</strong> VND</span>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    let npInputs='';
     for(let i=1;i<=npH;i++){
-      html+=`<div style="display:flex;align-items:center;gap:4px;font-size:0.82rem">
-        <span style="color:var(--gray);min-width:24px">H${i}:</span>
+      npInputs+=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.82rem;margin-right:8px">
+        <span style="color:var(--gray)">H${i}:</span>
         <input id="np_name_${i}" type="text" placeholder="受賞者名" value="${npNames[i-1]||''}"
           style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
-      </div>`;
+      </span>`;
     }
-    html+=`</div></div></div>`;
+    html+=`<tr style="border-bottom:1px solid #eee">
+      <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:top">
+        <span class="pb" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem;background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span>
+      </td>
+      <td style="padding:8px 6px;vertical-align:top">
+        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pNP)}</strong> VND</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${npInputs}</div>
+      </td>
+      <td></td>
+    </tr>`;
 
     // ドラコン（ホール数分の手入力欄）
-    html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;flex-wrap:wrap">
-      <span class="pb" style="display:inline-block;width:180px;text-align:center;font-size:0.85rem;flex-shrink:0;background:#fff3e0;color:#e65100">💨 ドラコン</span>
-      <div>
-        <span class="mvnd" style="display:block;margin-bottom:6px">1ホール +<strong>${fmt(pDC)}</strong> VND</span>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    let dcInputs='';
     for(let i=1;i<=dcH;i++){
-      html+=`<div style="display:flex;align-items:center;gap:4px;font-size:0.82rem">
-        <span style="color:var(--gray);min-width:24px">H${i}:</span>
+      dcInputs+=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.82rem;margin-right:8px">
+        <span style="color:var(--gray)">H${i}:</span>
         <input id="dc_name_${i}" type="text" placeholder="受賞者名" value="${dcNames[i-1]||''}"
           style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
-      </div>`;
+      </span>`;
     }
-    html+=`</div></div></div>`;
+    html+=`<tr>
+      <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:top">
+        <span class="pb" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem;background:#fff3e0;color:#e65100">💨 ドラコン</span>
+      </td>
+      <td style="padding:8px 6px;vertical-align:top">
+        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pDC)}</strong> VND</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${dcInputs}</div>
+      </td>
+      <td></td>
+    </tr>`;
 
-    html+=`</div>`;
+    html+=`</tbody></table></div>`;
   }
 
   html+=`</div>`;
