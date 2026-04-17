@@ -84,11 +84,12 @@
   .th-total { background: #071a0d !important; }
   .td-total { background: #071a0d !important; color: var(--gold) !important; font-weight: 700; font-size: 1.2rem; }
   .th-adj { background: #4a3800 !important; }
-  .td-adj { background: #fef9e7 !important; font-weight: 700; color: #4a3800; font-size: 1.1rem; }
+  .td-adj { background: #fef9e7 !important; font-weight: 700; color: #4a3800; font-size: 1.1rem; text-align: right; padding-right: 6px; }
   .th-decl { background: #7d5a00 !important; }
-  .td-decl { background: #fffbe6 !important; font-weight: 700; color: #5a3a00; }
+  .td-decl { background: #fffbe6 !important; font-weight: 700; color: #5a3a00; font-size: 1.0rem; text-align: right; padding-right: 6px; }
   .th-diff { background: #2a2a2a !important; }
-  .td-diff { background: #f8f8f6 !important; }
+  .td-diff { background: #f8f8f6 !important; font-size: 1.0rem; font-weight: 700; text-align: right; padding-right: 6px; }
+  .td-diff:last-child { font-size: 0.95rem; font-weight: 600; }
   .par-row td { background: #e5f0e5 !important; color: #2a5a2a; font-weight: 700; font-size: 0.85rem; }
 
   .diff-plus { color: var(--red); font-weight: 700; }
@@ -430,24 +431,31 @@ function applySetup(){
     });
     PAR=[...savedPar];
 
-    // スコアを復元して合計を再計算
+    // 各メンバーのスコアをdata-member/data-hole属性で正確に特定して復元
     members.forEach(m=>{
-      if(!hjScores[m.id]) return;
+      if(!hjScores[m.id] || Object.keys(hjScores[m.id]).length===0) return;
+      let hasAnyScore=false;
       for(let h=1;h<=18;h++){
-        const el=document.querySelector(`input[data-member="${m.id}"][data-hole="${h}"]`);
-        if(el && hjScores[m.id][h]) el.value=hjScores[m.id][h];
+        if(!hjScores[m.id][h]) continue;
+        const el=document.querySelector(
+          'input[data-member="'+m.id+'"][data-hole="'+h+'"]'
+        );
+        if(el){
+          el.value=hjScores[m.id][h];
+          hasAnyScore=true;
+        }
       }
-      updateHjRow(m.id);
+      if(hasAnyScore) updateHjRow(m.id);
     });
 
     // オリンピックポイントを復元
     members.filter(m=>m.olympic).forEach(m=>{
       if(!olympicData[m.id]) return;
-      const el=document.querySelector(`input[data-olympic-id="${m.id}"]`);
+      const el=document.querySelector('input[data-olympic-id="'+m.id+'"]');
       if(el) el.value=olympicData[m.id].pts||0;
     });
     renderOlympicRanking();
-  },100);
+  },150);
 
   showPage('honest');
 }
@@ -484,6 +492,7 @@ function toggleHole(chip,h,side){
   document.getElementById('outCount').textContent=hjHidden.out.length;
   document.getElementById('inCount').textContent=hjHidden.in.length;
   buildHjTable();
+  members.forEach(m=>updateHjRow(m.id));
 }
 
 function buildHjTable(){
@@ -512,13 +521,14 @@ function buildHjTable(){
   head+='<td class="td-diff">—</td><td class="td-diff">—</td></tr></thead>';
 
   let body='<tbody>';
-  members.forEach((m,mi)=>{
+  let tabCounter=1;
+  members.forEach((m)=>{
     if(!hjScores[m.id]) hjScores[m.id]={};
     body+=`<tr id="hjRow_${m.id}"><td class="name-cell">${m.name}</td>`;
     for(let h=1;h<=18;h++){
       const isH=hidden.includes(h);
       const val=hjScores[m.id][h]||'';
-      const ti=mi*18+h;
+      const ti=tabCounter++;
       body+=`<td class="${isH?'td-hidden':''}">
         <input class="score-inp" type="number" min="1" max="15" value="${val}" tabindex="${ti}"
           data-member="${m.id}" data-hole="${h}"
@@ -569,12 +579,18 @@ function updateHjRow(id){
       let cost=0;
       if(diff>0) cost=Math.min(diff*po,cap);
       else if(diff<0) cost=Math.min(Math.abs(diff)*pu,cap);
-      const cls=diff>0?'diff-plus':diff<0?'diff-minus':'diff-zero';
-      el('hjDiff_'+id).innerHTML=`<span class="${cls}">${diff>0?'+':''}${diff}</span>`;
-      const underMark=diff<0?' <small style="color:var(--blue)">(アンダー)</small>':'';
-      el('hjCost_'+id).innerHTML=cost>0?fmt(cost)+underMark:'-';
+      const diffCell=document.getElementById('hjDiff_'+id);
+      const costCell=document.getElementById('hjCost_'+id);
+      const txtColor=diff>0?'#c0392b':diff<0?'#2471a3':'#1a6b3c';
+      diffCell.style.color=txtColor; diffCell.style.background='';
+      costCell.style.color=txtColor; costCell.style.background='';
+      diffCell.style.fontSize='1.0rem'; diffCell.style.fontWeight='700'; diffCell.style.padding='4px 8px';
+      costCell.style.fontSize='1.0rem'; costCell.style.fontWeight='700'; costCell.style.padding='4px 8px';
+      diffCell.innerHTML=`${diff>0?'+':''}${diff}`;
+      costCell.innerHTML=cost>0?fmt(cost):'-';
     }
   } else {
+    // OUTだけ揃ったら小計表示、全体未完了でも分かる分だけ表示
     el('hjTotal_'+id).textContent='—';
     el('hjAdj_'+id).textContent='—';
     el('hjDiff_'+id).textContent='—';
@@ -610,28 +626,48 @@ function renderHjRanking(){
   const complete=rows.filter(r=>r.complete);
   if(complete.length===0){ div.innerHTML=''; return; }
 
-  const sorted=[...complete].sort((a,b)=>a.cost-b.cost||((a.diff>=0?0:1)-(b.diff>=0?0:1)));
+  // オーバー組：罰金少ない順 / アンダー組：誤差小さい順（-1,-2,-3...）
+  const overRows=complete.filter(r=>r.diff>=0).sort((a,b)=>a.cost-b.cost);
+  const underRows=complete.filter(r=>r.diff<0).sort((a,b)=>b.diff-a.diff); // -1が上
+  const allSorted=[...overRows,...underRows];
+
+  // 特別賞用（アンダー除外）
+  const eligible=overRows;
+
   const allDone=(complete.length===members.length);
+  const hiddenCount=hidden.length;
 
   let html=`<div class="card results-section">
-    <div class="results-title">オネストジョン ランキング（${complete.length}/${members.length}名完了）</div>
+    <div class="results-title">罰金ランキング（${complete.length}/${members.length}名完了）</div>`;
+
+  // 隠しホール未確定警告
+  if(hiddenCount<6){
+    html+=`<div class="alert alert-warn" style="margin-bottom:12px">⚠️ 隠しホールが未確定です（現在 ${hiddenCount}/6 選択）。確定後にランキングが正式になります。</div>`;
+  }
+
+  html+=`
     <div class="rank-table-wrap"><table class="rank-table"><thead><tr>
       <th>順位</th><th>名前</th><th>申告</th><th>グロス</th>
       <th>調整後</th><th>誤差</th><th>罰金(VND)</th>
     </tr></thead><tbody>`;
 
-  sorted.forEach((r,i)=>{
+  allSorted.forEach((r,i)=>{
     const diff=r.diff;
-    const cls=diff>0?'diff-plus':diff<0?'diff-minus':'diff-zero';
-    const badge=`<span class="rank-badge ${i<3?'r'+(i+1):'rx'}">${i+1}</span>`;
-    const underMark=diff<0?' <small style="color:var(--blue)">(アンダー)</small>':'';
+    const isUnder=diff<0;
+    const rankNum=isUnder?'':i+1; // アンダーは順位番号なし
+    const badgeCls=isUnder?'rx':(i<3?'r'+(i+1):'rx');
+    const badge=isUnder
+      ? `<span class="rank-badge" style="background:#1a4a8a;color:white;font-size:0.72rem">―</span>`
+      : `<span class="rank-badge ${badgeCls}">${i+1}</span>`;
+    const diffBg=diff>0?'#c0392b':diff<0?'#1a4a8a':'#1a6b3c';
     html+=`<tr>
       <td>${badge}</td><td><strong>${r.member.name}</strong></td>
       <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
-      <td><span class="${cls}">${diff>0?'+':''}${diff}</span></td>
-      <td>${r.cost>0?fmt(r.cost)+underMark:'-'}</td>
+      <td style="background:${diffBg};color:white;font-weight:700">${diff>0?'+':''}${diff}</td>
+      <td style="background:${diffBg};color:white;font-weight:700">${r.cost>0?fmt(r.cost):'-'}</td>
     </tr>`;
   });
+
   html+=`</tbody></table></div>`;
 
   if(allDone){
@@ -644,16 +680,59 @@ function renderHjRanking(){
     const pNP=getRaw('prizeNP'),npH=+document.getElementById('npHoles').value||4;
     const pDC=getRaw('prizeDC'),dcH=+document.getElementById('dcHoles').value||4;
 
-    html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div><div class="rank-table-wrap"><table class="rank-table"><tbody>`;
-    if(sorted[0]) html+=`<tr><td><span class="pb pb-1">🥇 1位</span> <strong>${sorted[0].member.name}</strong></td><td class="mvnd">+<strong>${fmt(p1)}</strong> VND</td></tr>`;
-    if(sorted[1]) html+=`<tr><td><span class="pb pb-2">🥈 2位</span> <strong>${sorted[1].member.name}</strong></td><td class="mvnd">+<strong>${fmt(p2)}</strong> VND</td></tr>`;
-    if(sorted[2]) html+=`<tr><td><span class="pb pb-3">🥉 3位</span> <strong>${sorted[2].member.name}</strong></td><td class="mvnd">+<strong>${fmt(p3)}</strong> VND</td></tr>`;
-    if(bestGros) html+=`<tr><td><span class="pb pb-bg">🏆 ベスグロ</span> <strong>${bestGros.member.name}</strong>（グロス ${bestGros.total}打）</td><td class="mvnd">+<strong>${fmt(pBG)}</strong> VND</td></tr>`;
-    if(booby) html+=`<tr><td><span class="pb pb-bo">💀 ブービー</span> <strong>${booby.member.name}</strong>（${booby.total}打）</td><td class="mvnd">+<strong>${fmt(pBo)}</strong> VND</td></tr>`;
-    if(boobyMaker) html+=`<tr><td><span class="pb pb-bm">🐢 ブービーメーカー</span> <strong>${boobyMaker.member.name}</strong>（${boobyMaker.total}打）</td><td class="mvnd">+<strong>${fmt(pBM)}</strong> VND</td></tr>`;
-    html+=`<tr><td><span class="pb" style="background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span> 受賞者は当日発表（${npH}ホール）</td><td class="mvnd">合計 <strong>${fmt(pNP*npH)}</strong> VND</td></tr>`;
-    html+=`<tr><td><span class="pb" style="background:#fff3e0;color:#e65100">💨 ドラコン</span> 受賞者は当日発表（${dcH}ホール）</td><td class="mvnd">合計 <strong>${fmt(pDC*dcH)}</strong> VND</td></tr>`;
-    html+=`</tbody></table></div></div>`;
+    // ニアピン・ドラコン入力欄の既存値を保持
+    const npNames=[];const dcNames=[];
+    for(let i=1;i<=npH;i++) npNames.push((document.getElementById(`np_name_${i}`)||{}).value||'');
+    for(let i=1;i<=dcH;i++) dcNames.push((document.getElementById(`dc_name_${i}`)||{}).value||'');
+
+    html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div>`;
+
+    // 賞行（バッジ・名前・賞金を均等揃え）
+    const prizeRow=(badgeCls,label,name,money)=>
+      `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #eee">
+        <span class="pb ${badgeCls}" style="display:inline-block;width:180px;text-align:center;font-size:0.85rem;flex-shrink:0">${label}</span>
+        <strong style="min-width:120px;font-size:1rem">${name}</strong>
+        <span class="mvnd" style="margin-left:24px">+<strong>${fmt(money)}</strong> VND</span>
+      </div>`;
+
+    if(eligible[0]) html+=prizeRow('pb-1','🥇 オネストジョン優勝',eligible[0].member.name,p1);
+    if(eligible[1]) html+=prizeRow('pb-2','🥈 オネストジョン準優勝',eligible[1].member.name,p2);
+    if(eligible[2]) html+=prizeRow('pb-3','🥉 オネストジョン3位',eligible[2].member.name,p3);
+    if(bestGros)    html+=prizeRow('pb-bg','🏆 ベスグロ',`${bestGros.member.name}（グロス ${bestGros.total}打）`,pBG);
+    if(booby)       html+=prizeRow('pb-bo','💀 ブービー',`${booby.member.name}（${booby.total}打）`,pBo);
+    if(boobyMaker)  html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${boobyMaker.member.name}（${boobyMaker.total}打）`,pBM);
+
+    // ニアピン（ホール数分の手入力欄）
+    html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;border-bottom:1px solid #eee;flex-wrap:wrap">
+      <span class="pb" style="display:inline-block;width:180px;text-align:center;font-size:0.85rem;flex-shrink:0;background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span>
+      <div>
+        <span class="mvnd" style="display:block;margin-bottom:6px">1ホール +<strong>${fmt(pNP)}</strong> VND</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    for(let i=1;i<=npH;i++){
+      html+=`<div style="display:flex;align-items:center;gap:4px;font-size:0.82rem">
+        <span style="color:var(--gray);min-width:24px">H${i}:</span>
+        <input id="np_name_${i}" type="text" placeholder="受賞者名" value="${npNames[i-1]||''}"
+          style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
+      </div>`;
+    }
+    html+=`</div></div></div>`;
+
+    // ドラコン（ホール数分の手入力欄）
+    html+=`<div style="display:flex;align-items:flex-start;gap:12px;padding:8px 0;flex-wrap:wrap">
+      <span class="pb" style="display:inline-block;width:180px;text-align:center;font-size:0.85rem;flex-shrink:0;background:#fff3e0;color:#e65100">💨 ドラコン</span>
+      <div>
+        <span class="mvnd" style="display:block;margin-bottom:6px">1ホール +<strong>${fmt(pDC)}</strong> VND</span>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">`;
+    for(let i=1;i<=dcH;i++){
+      html+=`<div style="display:flex;align-items:center;gap:4px;font-size:0.82rem">
+        <span style="color:var(--gray);min-width:24px">H${i}:</span>
+        <input id="dc_name_${i}" type="text" placeholder="受賞者名" value="${dcNames[i-1]||''}"
+          style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
+      </div>`;
+    }
+    html+=`</div></div></div>`;
+
+    html+=`</div>`;
   }
 
   html+=`</div>`;
@@ -677,11 +756,11 @@ function buildOlympicPage(){
   let html='<div style="display:flex;flex-wrap:wrap;gap:16px;padding:4px 0">';
   parts.forEach(m=>{
     const val=(olympicData[m.id]||{}).pts||0;
-    html+=`<div style="display:flex;flex-direction:column;align-items:center;min-width:72px;background:#f8f8f5;border-radius:8px;padding:10px 8px;border:1px solid var(--border)">
-      <div style="font-weight:700;font-size:0.95rem;margin-bottom:8px;white-space:nowrap">${m.name}</div>
+    html+=`<div style="display:flex;flex-direction:column;align-items:center;min-width:80px;background:#f8f8f5;border-radius:8px;padding:10px 8px;border:1px solid var(--border)">
+      <div style="font-weight:700;font-size:1.0rem;margin-bottom:8px;white-space:nowrap">${m.name}</div>
       <input type="number" min="-999" max="999" value="${val}"
         data-olympic-id="${m.id}"
-        style="width:64px;text-align:center;font-size:1.1rem;font-weight:700;padding:6px 4px;border:2px solid var(--border);border-radius:6px;background:var(--cream)"
+        style="width:68px;text-align:right;font-size:1.2rem;font-weight:700;padding:6px 6px;border:2px solid var(--border);border-radius:6px;background:var(--cream)"
         oninput="olympicData['${m.id}'].pts=+this.value;renderOlympicRanking()">
     </div>`;
   });
@@ -711,30 +790,30 @@ function renderOlympicRanking(){
 
   let html=`<div class="card results-section">
     <div class="results-title">オリンピック ランキング</div>
-    <div class="rank-table-wrap"><table class="rank-table"><thead><tr>
-      <th>順位</th><th>名前</th>
-      <th>獲得ポイント</th>
-      <th>最終得点</th>
-      <th>オリンピッカー<small style="display:block;font-size:0.7rem;font-weight:400;color:var(--gray)">参加者合計</small></th>
-      <th>賞金＆罰金(VND)</th>
+    <div class="rank-table-wrap" style="max-width:600px">
+    <table class="rank-table"><thead><tr>
+      <th style="font-size:0.8rem;text-align:center">順位</th>
+      <th style="font-size:0.8rem;text-align:left">名前</th>
+      <th style="font-size:0.8rem;text-align:right">獲得ポイント</th>
+      <th style="font-size:0.8rem;text-align:right">最終得点</th>
+      <th style="font-size:0.8rem;text-align:right">賞金＆罰金(VND)</th>
     </tr></thead><tbody>`;
 
   rows.forEach((r,i)=>{
     const badge=`<span class="rank-badge ${i<3?'r'+(i+1):'rx'}">${i+1}</span>`;
     const money=r.score*10000;
     let moneyCell;
-    if(money>0) moneyCell=`<span style="color:var(--green);font-weight:700">+${fmt(money)}</span>`;
-    else if(money<0) moneyCell=`<span style="color:var(--red);font-weight:700">−${fmt(Math.abs(money))}</span>`;
+    if(money>0) moneyCell=`<span style="color:var(--green);font-weight:600;font-size:1.1rem">+${fmt(money)}</span>`;
+    else if(money<0) moneyCell=`<span style="color:var(--red);font-weight:600;font-size:1.1rem">−${fmt(Math.abs(money))}</span>`;
     else moneyCell='—';
     const scoreColor=r.score>0?'var(--green)':r.score<0?'var(--red)':'var(--gray)';
     const scoreStr=r.score>0?`+${r.score}`:String(r.score);
     html+=`<tr>
-      <td>${badge}</td>
-      <td><strong>${r.member.name}</strong></td>
-      <td><span class="net-pts" style="font-size:1.4rem;color:#0f2040">${r.pts}</span></td>
-      <td><span class="net-pts" style="font-size:1.4rem;color:${scoreColor}">${scoreStr}</span></td>
-      <td style="font-weight:700;color:#555;font-size:1.1rem">${totalAll}pt</td>
-      <td style="font-size:1rem">${moneyCell}</td>
+      <td style="text-align:center;font-size:1.1rem">${badge}</td>
+      <td style="text-align:left;font-size:1.1rem;font-weight:700">${r.member.name}</td>
+      <td style="text-align:right;font-size:1.2rem;font-weight:700;color:#0f2040">${r.pts}</td>
+      <td style="text-align:right"><span style="font-size:1.3rem;font-weight:700;color:${scoreColor}">${scoreStr}</span></td>
+      <td style="text-align:right">${moneyCell}</td>
     </tr>`;
   });
   html+=`</tbody></table></div></div>`;
