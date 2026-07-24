@@ -501,9 +501,9 @@ function buildHjTable(){
   for(let h=1;h<=9;h++) head+=`<th class="${hidden.includes(h)?'th-hidden':''}">${h}</th>`;
   head+='<th class="th-sub">OUT</th>';
   for(let h=10;h<=18;h++) head+=`<th class="${hidden.includes(h)?'th-hidden':''}">${h}</th>`;
-  head+='<th class="th-sub">IN</th><th class="th-total">TOTAL</th>';
+  head+='<th class="th-sub">IN</th><th class="th-total">グロス<br>トータル</th>';
+  head+='<th class="th-decl" style="min-width:32px">申告<br>スコア</th>';
   head+='<th class="th-adj" title="隠しホール→パー固定の調整後スコア">調整後</th>';
-  head+='<th class="th-decl" style="min-width:32px">申告スコア</th>';
   head+='<th class="th-diff">誤差</th><th class="th-diff">罰金</th>';
   head+='</tr>';
 
@@ -514,8 +514,8 @@ function buildHjTable(){
   for(let h=10;h<=18;h++) head+=`<td><input id="par_h${h}" class="par-inp" type="number" min="3" max="6" value="${PAR[h-1]}" oninput="onParInput()"></td>`;
   head+=`<td id="parIn_sum" class="td-sub" style="font-size:0.80rem">${PAR.slice(9).reduce((a,b)=>a+b,0)}</td>`;
   head+=`<td id="parTotal_sum" class="td-total" style="font-size:0.80rem">${PAR.reduce((a,b)=>a+b,0)}</td>`;
-  head+='<td class="td-adj" style="font-size:0.70rem">—</td>';
   head+='<td class="td-decl" style="font-size:0.70rem">申告スコア</td>';
+  head+='<td class="td-adj" style="font-size:0.70rem">—</td>';
   head+='<td class="td-diff">—</td><td class="td-diff">—</td></tr></thead>';
 
   let body='<tbody>';
@@ -536,12 +536,25 @@ function buildHjTable(){
     }
     body+=`<td class="td-sub" id="hjIn_${m.id}">—</td>`;
     body+=`<td class="td-total" id="hjTotal_${m.id}">—</td>`;
-    body+=`<td class="td-adj" id="hjAdj_${m.id}">—</td>`;
     body+=`<td class="td-decl">${m.declared}</td>`;
+    body+=`<td class="td-adj" id="hjAdj_${m.id}">—</td>`;
     body+=`<td class="td-diff" id="hjDiff_${m.id}">—</td>`;
     body+=`<td class="td-diff" id="hjCost_${m.id}">—</td>`;
     body+='</tr>';
   });
+  // 罰金合計行
+  body+=`<tr id="hjTotalRow">
+    <td class="name-cell" style="font-size:1.0rem;font-weight:700;color:var(--gold);background:var(--green-dark);padding:8px 6px">罰金合計</td>`;
+  for(let h=1;h<=9;h++) body+='<td style="background:var(--green-dark)"></td>';
+  body+='<td style="background:var(--green-dark)"></td>'; // OUT
+  for(let h=10;h<=18;h++) body+='<td style="background:var(--green-dark)"></td>';
+  body+='<td style="background:var(--green-dark)"></td>'; // IN
+  body+='<td style="background:var(--green-dark)"></td>'; // グロストータル
+  body+='<td style="background:var(--green-dark)"></td>'; // 申告スコア
+  body+='<td style="background:var(--green-dark)"></td>'; // 調整後
+  body+='<td style="background:var(--green-dark)"></td>'; // 誤差
+  body+=`<td id="hjCostTotal" style="background:var(--green-dark);color:var(--gold);font-size:1.2rem;font-weight:700;text-align:right;padding-right:6px;white-space:nowrap">—</td>`;
+  body+='</tr>';
   body+='</tbody>';
   tbl.innerHTML=head+body;
 }
@@ -584,8 +597,8 @@ function updateHjRow(id){
       costCell.style.color=txtColor; costCell.style.background='';
       diffCell.style.fontSize='1.0rem'; diffCell.style.fontWeight='700'; diffCell.style.padding='4px 8px';
       costCell.style.fontSize='1.0rem'; costCell.style.fontWeight='700'; costCell.style.padding='4px 8px';
-      diffCell.innerHTML=`${diff>0?'+':''}${diff}`;
-      costCell.innerHTML=cost>0?fmt(cost):'-';
+      diffCell.innerHTML=diff>0?`+${diff}打`:diff<0?`${diff}打`:'±0';
+      costCell.innerHTML=cost>0?(diff>0?`-${fmt(cost)}`:`-${fmt(cost)}`):'±0';
     }
   } else {
     // OUTだけ揃ったら小計表示、全体未完了でも分かる分だけ表示
@@ -594,8 +607,31 @@ function updateHjRow(id){
     el('hjDiff_'+id).textContent='—';
     el('hjCost_'+id).textContent='—';
   }
+  // 罰金合計をリアルタイム更新
+  updateCostTotal();
   // ❸ 自動ランキング更新
   renderHjRanking();
+}
+
+function updateCostTotal(){
+  const totalEl=document.getElementById('hjCostTotal');
+  if(!totalEl) return;
+  getParFromInputs();
+  const hidden=[...hjHidden.out,...hjHidden.in];
+  const po=getRaw('pen_over'), pu=getRaw('pen_under'), cap=getRaw('pen_cap');
+  let sum=0;
+  members.forEach(m=>{
+    const s=hjScores[m.id]||{};
+    let allFilled=true, adj=0;
+    for(let h=1;h<=18;h++){ if(!s[h]) allFilled=false; adj+=hidden.includes(h)?PAR[h-1]:(s[h]||0); }
+    if(!allFilled) return;
+    const diff=adj-(m.declared||0);
+    let cost=0;
+    if(diff>0) cost=Math.min(diff*po,cap);
+    else if(diff<0) cost=Math.min(Math.abs(diff)*pu,cap);
+    sum+=cost;
+  });
+  totalEl.innerHTML=sum>0?`${fmt(sum)} VND`:'—';
 }
 
 // ❸ オネストジョン リアルタイムランキング
@@ -632,6 +668,24 @@ function renderHjRanking(){
   // 特別賞・順位対象はオーバー組のみ
   const eligible=overRows;
 
+  // 同点按分計算（同じcostの人をグループ化し、該当順位の賞金を按分）
+  const prizes=[getRaw('prize1'),getRaw('prize2'),getRaw('prize3')];
+  const prizeMap=new Map();
+  let pos=0;
+  while(pos<eligible.length){
+    const currentCost=eligible[pos].cost;
+    let groupEnd=pos;
+    while(groupEnd<eligible.length && eligible[groupEnd].cost===currentCost) groupEnd++;
+    const groupSize=groupEnd-pos;
+    let totalPrize=0;
+    for(let r=pos;r<groupEnd;r++){ if(r<prizes.length) totalPrize+=prizes[r]; }
+    const splitPrize=groupSize>0?Math.floor(totalPrize/groupSize):0;
+    for(let r=pos;r<groupEnd;r++){
+      prizeMap.set(eligible[r].member.id, {prize:splitPrize, splitCount:groupSize, rankStart:pos+1});
+    }
+    pos=groupEnd;
+  }
+
   const allDone=(complete.length===members.length);
   const hiddenCount=hidden.length;
 
@@ -646,42 +700,60 @@ function renderHjRanking(){
   html+=`
     <div class="rank-table-wrap"><table class="rank-table"><thead><tr>
       <th>順位</th><th>名前</th><th>申告</th><th>グロス</th>
-      <th>調整後</th><th>誤差</th><th>罰金(VND)</th>
+      <th>調整後</th><th>誤差</th><th>賞金(VND)</th><th>罰金(VND)</th>
     </tr></thead><tbody>`;
 
-  // 順位対象（オーバー組）のみ表示
+  // 順位対象（オーバー組）
   overRows.forEach((r,i)=>{
     const diff=r.diff;
     const badgeCls=i<3?'r'+(i+1):'rx';
     const badge=`<span class="rank-badge ${badgeCls}">${i+1}</span>`;
     const diffColor=diff>0?'#c0392b':'#1a6b3c';
+    const diffStr=diff>0?`+${diff}打`:diff<0?`${diff}打`:'±0';
+    const costStr=r.cost>0?`-${fmt(r.cost)}`:'±0';
+    const pm=prizeMap.get(r.member.id);
+    let prizeStr='—';
+    if(pm && pm.prize>0){
+      prizeStr=`<span style="color:var(--green);font-weight:700">+${fmt(pm.prize)}</span>`;
+      if(pm.splitCount>1) prizeStr+=`<span style="font-size:0.7rem;color:var(--gray);display:block">(${pm.splitCount}名按分)</span>`;
+    }
     html+=`<tr>
       <td>${badge}</td><td><strong>${r.member.name}</strong></td>
       <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
-      <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${diff>0?'+':''}${diff}</td>
-      <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${r.cost>0?fmt(r.cost):'-'}</td>
+      <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${diffStr}</td>
+      <td style="font-size:1.0rem">${prizeStr}</td>
+      <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${costStr}</td>
     </tr>`;
   });
 
-  // アンダー組は対象外としてグレー表示
+  // アンダー組（対象外だが全員表示）
   underRows.forEach(r=>{
-    html+=`<tr style="color:#aaa;background:#f5f5f5">
+    const costStr=r.cost>0?`-${fmt(r.cost)}`:'±0';
+    html+=`<tr style="background:#f9f9f7">
       <td><span class="rank-badge" style="background:#ddd;color:#999;font-size:0.70rem">―</span></td>
-      <td>${r.member.name}</td>
+      <td><strong>${r.member.name}</strong> <span style="color:#aaa;font-size:0.75rem">※対象外</span></td>
       <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
-      <td style="font-weight:700;font-size:0.9rem;color:#aaa">※対象外（アンダー）誤差${r.diff}</td>
-      <td style="color:#aaa">-</td>
+      <td style="color:#2471a3;font-weight:700;font-size:1.0rem">${r.diff}打</td>
+      <td>—</td>
+      <td style="color:#2471a3;font-weight:700;font-size:1.0rem">${costStr}</td>
     </tr>`;
   });
 
   html+=`</tbody></table></div>`;
 
   if(allDone){
+    // ベスグロ：全メンバー対象、グロス最少（同グロス全員受賞）
+    const bgSorted=[...complete].sort((a,b)=>a.total-b.total);
+    const bestGrossScore=bgSorted[0]?bgSorted[0].total:null;
+    const bestGrosGroup=bgSorted.filter(r=>r.total===bestGrossScore);
+    // ブービー・ブービーメーカー：オーバー組のみ対象
     const eligibleAll=complete.filter(r=>r.diff>=0);
-    const byTotal=[...eligibleAll].sort((a,b)=>a.total-b.total);
-    const bestGros=byTotal[0];
     const byGross=[...eligibleAll].sort((a,b)=>b.total-a.total);
-    const boobyMaker=byGross[0], booby=byGross.length>1?byGross[1]:null;
+    const bmScore=byGross[0]?byGross[0].total:null;
+    const bmGroup=byGross.filter(r=>r.total===bmScore);
+    const afterBm=byGross.filter(r=>r.total!==bmScore);
+    const boScore=afterBm[0]?afterBm[0].total:null;
+    const boGroup=afterBm.filter(r=>r.total===boScore);
     const p1=getRaw('prize1'),p2=getRaw('prize2'),p3=getRaw('prize3');
     const pBG=getRaw('prizeBG'),pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM');
     const pNP=getRaw('prizeNP'),npH=+document.getElementById('npHoles').value||4;
@@ -696,21 +768,46 @@ function renderHjRanking(){
     <table style="border-collapse:collapse;width:100%"><tbody>`;
 
     // table形式の賞行ヘルパー
-    const prizeRow=(badgeCls,label,name,money)=>
+    const prizeRow=(badgeCls,label,name,money,splitNote)=>
       `<tr style="border-bottom:1px solid #eee">
         <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:middle">
           <span class="pb ${badgeCls}" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem">${label}</span>
         </td>
         <td style="width:160px;padding:8px 6px;font-weight:700;font-size:1rem;vertical-align:middle">${name}</td>
-        <td style="padding:8px 6px 8px 24px;text-align:right;white-space:nowrap;font-weight:700;vertical-align:middle">+<strong>${fmt(money)}</strong> VND</td>
+        <td style="padding:8px 6px 8px 24px;text-align:right;white-space:nowrap;font-weight:700;vertical-align:middle">+<strong>${fmt(money)}</strong> VND${splitNote?`<br><span style="font-size:0.72rem;color:var(--gray);font-weight:400">${splitNote}</span>`:''}</td>
       </tr>`;
 
-    if(eligible[0]) html+=prizeRow('pb-1','🥇 オネストジョン優勝',eligible[0].member.name,p1);
-    if(eligible[1]) html+=prizeRow('pb-2','🥈 オネストジョン準優勝',eligible[1].member.name,p2);
-    if(eligible[2]) html+=prizeRow('pb-3','🥉 オネストジョン3位',eligible[2].member.name,p3);
-    if(bestGros)    html+=prizeRow('pb-bg','🏆 ベスグロ',`${bestGros.member.name}（グロス ${bestGros.total}打）`,pBG);
-    if(booby)       html+=prizeRow('pb-bo','💀 ブービー',`${booby.member.name}（${booby.total}打）`,pBo);
-    if(boobyMaker)  html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${boobyMaker.member.name}（${boobyMaker.total}打）`,pBM);
+    // 同点按分を反映した1位〜3位表示（賞金がある人だけ表示）
+    const rankLabels=['pb-1','pb-2','pb-3'];
+    const rankNames=['🥇 オネストジョン優勝','🥈 オネストジョン準優勝','🥉 オネストジョン3位'];
+    for(let i=0;i<eligible.length;i++){
+      const pm=prizeMap.get(eligible[i].member.id);
+      if(!pm || pm.prize<=0) continue;
+      const labelIdx=Math.min(i,2);
+      const splitNote=pm.splitCount>1?`(${pm.splitCount}名按分)`:'';
+      html+=prizeRow(rankLabels[labelIdx],rankNames[labelIdx],eligible[i].member.name,pm.prize,splitNote);
+    }
+    // ベスグロ（同点按分対応）
+    if(bestGrosGroup.length>0){
+      const bgNames=bestGrosGroup.map(r=>r.member.name).join('・');
+      const bgPrize=Math.floor(pBG/bestGrosGroup.length);
+      const bgNote=bestGrosGroup.length>1?`(${bestGrosGroup.length}名按分)`:'';
+      html+=prizeRow('pb-bg','🏆 ベスグロ',`${bgNames}（グロス ${bestGrossScore}打）`,bgPrize,bgNote);
+    }
+    // ブービー（同点按分対応）
+    if(boGroup.length>0){
+      const boNames=boGroup.map(r=>r.member.name).join('・');
+      const boPrize=Math.floor(pBo/boGroup.length);
+      const boNote=boGroup.length>1?`(${boGroup.length}名按分)`:'';
+      html+=prizeRow('pb-bo','💀 ブービー',`${boNames}（${boScore}打）`,boPrize,boNote);
+    }
+    // ブービーメーカー（同点按分対応）
+    if(bmGroup.length>0){
+      const bmNames=bmGroup.map(r=>r.member.name).join('・');
+      const bmPrize=Math.floor(pBM/bmGroup.length);
+      const bmNote=bmGroup.length>1?`(${bmGroup.length}名按分)`:'';
+      html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${bmNames}（${bmScore}打）`,bmPrize,bmNote);
+    }
 
     // ニアピン（ホール数分の手入力欄）
     let npInputs='';
