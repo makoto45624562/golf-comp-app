@@ -1186,10 +1186,10 @@ function buildKanjiPage(){
   const balance=incomeTotal-payTotal;
 
   // HTML構築
-  let html=`<div class="setup-grid" style="margin-bottom:20px;align-items:start;max-width:1000px">`;
+  let html=`<div class="setup-grid" style="margin-bottom:20px;align-items:start;max-width:900px">`;
 
   // 左側：支払い
-  html+=`<div class="card card-red" style="min-height:200px">
+  html+=`<div class="card card-red" style="padding:16px 14px">
     <div class="card-title">支払い（支出）</div>`;
   if(payItems.length>0){
     html+=`<table style="border-collapse:collapse;width:100%;font-size:0.85rem">`;
@@ -1199,45 +1199,44 @@ function buildKanjiPage(){
       if(['1位','2位','3位','ブービー','ブービーメーカー'].includes(item.label)) section='オネストジョン';
       else section='ニアピン・ドラコン・ベスグロ';
       if(section!==prevSection){
-        html+=`<tr><td colspan="3" style="padding:8px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">${section}</td></tr>`;
+        html+=`<tr><td colspan="3" style="padding:6px 2px 2px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">${section}</td></tr>`;
         prevSection=section;
       }
       html+=`<tr style="border-bottom:1px solid #f5f5f5">
-        <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem;white-space:nowrap;width:100px">${item.label}</td>
-        <td style="padding:6px 4px;font-weight:600;white-space:nowrap">${item.name}</td>
-        <td style="padding:6px 4px 6px 12px;text-align:right;white-space:nowrap;color:var(--red);font-weight:700">-${fmt(item.amount)}</td>
+        <td style="padding:4px 2px;color:var(--gray);font-size:0.8rem;white-space:nowrap">${item.label}</td>
+        <td style="padding:4px 6px;font-weight:600;white-space:nowrap">${item.name}</td>
+        <td style="padding:4px 2px;text-align:right;white-space:nowrap;color:var(--red);font-weight:700">-${fmt(item.amount)}</td>
       </tr>`;
     });
     html+=`</table>`;
   } else {
     html+=`<p style="color:var(--gray);font-size:0.85rem;padding:12px 0">データが揃うと自動表示されます</p>`;
   }
-  html+=`<div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--red);text-align:right">
+  html+=`<div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--red);text-align:right">
     <span style="font-size:0.8rem;color:var(--gray)">支払い合計</span><br>
-    <span style="font-size:1.6rem;font-weight:700;color:var(--red)">-${fmt(payTotal)} VND</span>
+    <span style="font-size:1.5rem;font-weight:700;color:var(--red)">-${fmt(payTotal)} VND</span>
   </div></div>`;
 
   // 右側：収入
-  html+=`<div class="card" style="border-top:4px solid var(--green);min-height:200px">
+  html+=`<div class="card" style="border-top:4px solid var(--green);padding:16px 14px">
     <div class="card-title" style="color:var(--green)">収入</div>
     <table style="border-collapse:collapse;width:100%;font-size:0.85rem">
-    <tr><td colspan="2" style="padding:8px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">参加費</td></tr>
+    <tr><td colspan="2" style="padding:6px 2px 2px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">参加費</td></tr>
     <tr style="border-bottom:1px solid #f5f5f5">
-      <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem;white-space:nowrap;vertical-align:middle">1人あたり
-        <input id="kanjiPerFee" type="text" value="${fmt(perFee)}" oninput="fmtInput(this);onKanjiFeeInput()" inputmode="numeric"
-          style="width:100px;padding:4px 6px;font-size:0.88rem;border:1px solid var(--border);border-radius:4px;background:var(--cream);margin:0 4px">
-        × ${memberCount}名</td>
-      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700" id="kanjiFeeTotal">= ${fmt(feeTotal)}</td>
+      <td colspan="2" style="padding:6px 2px;color:var(--gray);font-size:0.8rem;white-space:nowrap;vertical-align:middle">1人あたり
+        <input id="kanjiPerFee" type="number" value="${perFee}" oninput="onKanjiFeeInput()" min="0" max="9999999"
+          style="width:90px;padding:4px 6px;font-size:0.88rem;border:1px solid var(--border);border-radius:4px;background:var(--cream);margin:0 2px;text-align:right">
+        × ${memberCount}名 <span style="color:var(--green);font-weight:700" id="kanjiFeeTotal">= ${fmt(feeTotal)}</span></td>
     </tr>
-    <tr><td colspan="2" style="padding:12px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">罰金</td></tr>
+    <tr><td colspan="2" style="padding:8px 2px 2px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">罰金</td></tr>
     <tr>
-      <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem">罰金合計</td>
-      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700" id="kanjiPenaltyTotal">${penaltyTotal>0?'+'+fmt(penaltyTotal):'—'}</td>
+      <td style="padding:4px 2px;color:var(--gray);font-size:0.8rem">罰金合計</td>
+      <td style="padding:4px 2px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700" id="kanjiPenaltyTotal">${penaltyTotal>0?'+'+fmt(penaltyTotal):'—'}</td>
     </tr>
     </table>
-    <div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--green);text-align:right">
+    <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--green);text-align:right">
       <span style="font-size:0.8rem;color:var(--gray)">収入合計</span><br>
-      <span id="kanjiIncomeTotal" style="font-size:1.6rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)} VND</span>
+      <span id="kanjiIncomeTotal" style="font-size:1.5rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)} VND</span>
     </div>
   </div>`;
 
@@ -1247,7 +1246,7 @@ function buildKanjiPage(){
   const balColor=balance>=0?'var(--green)':'var(--red)';
   const balLabel=balance>=0?'黒字':'赤字';
   const balStr=balance>=0?`+${fmt(balance)}`:`-${fmt(Math.abs(balance))}`;
-  html+=`<div class="card" style="text-align:center;max-width:1000px;border-top:4px solid ${balance>=0?'var(--green)':'var(--red)'}">
+  html+=`<div class="card" style="text-align:center;max-width:900px;border-top:4px solid ${balance>=0?'var(--green)':'var(--red)'}">
     <div class="card-title">収支バランス</div>
     <div id="kanjiBalanceArea" style="display:flex;justify-content:center;align-items:center;gap:24px;flex-wrap:wrap;margin:8px 0">
       <div><span style="font-size:0.8rem;color:var(--gray)">収入</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)}</span></div>
@@ -1268,7 +1267,8 @@ function buildKanjiPage(){
 function onKanjiFeeInput(){
   const feeEl=document.getElementById('kanjiPerFee');
   if(!feeEl) return;
-  kanjiPerFee=getRawEl(feeEl)||kanjiPerFee;
+  const v=parseInt(feeEl.value,10);
+  if(v>0) kanjiPerFee=v;
   const memberCount=members.length;
   const feeTotal=kanjiPerFee*memberCount;
 
