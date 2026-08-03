@@ -206,11 +206,11 @@
   <span id="compTitle">コンペ名未設定</span>
 </header>
 
-<!-- ❹ タブは3つのみ -->
 <div class="tabs">
   <button class="tab active" onclick="showPage('setup')">① メンバー設定</button>
   <button class="tab" onclick="showPage('honest')">② オネストジョン</button>
   <button class="tab" onclick="showPage('olympic')">③ オリンピック</button>
+  <button class="tab" onclick="showPage('rules')">④ ルール</button>
 </div>
 
 <main>
@@ -307,6 +307,11 @@
   <div id="olympicRanking"></div>
 </div>
 
+<!-- ===== RULES ===== -->
+<div id="page-rules" class="page">
+  <div id="rulesContent"></div>
+</div>
+
 </main>
 
 <script>
@@ -317,7 +322,10 @@ let members = [];
 let hjHidden = { out: [], in: [] };
 let hjScores = {};
 let olympicData = {};
+let npDcNames = { np: [], dc: [] };
 let mc = 0;
+let currentPage = 'setup';
+let pagesBuilt = false;
 
 let PAR = [4,3,4,5,4,3,4,5,4, 4,3,4,5,4,3,4,5,4];
 
@@ -340,13 +348,102 @@ function fmtInput(el){
 function getRaw(id){ return parseInt((document.getElementById(id).value||'').replace(/,/g,''),10)||0; }
 function updateTitle(){ document.getElementById('compTitle').textContent = document.getElementById('compName').value || 'コンペ名未設定'; }
 
-// ❹ タブは3つのみ
 function showPage(p){
+  // ① 現在のページからデータを保存
+  saveStateFromDOM();
+  // ② メンバー設定ページのDOM→stateを同期
+  syncMembersFromDOM();
+
+  // ③ メンバーがいれば各ページを再構築
+  if(members.length>0){
+    buildHonestPage();
+    buildOlympicPage();
+    pagesBuilt=true;
+    // 即座にデータを復元（setTimeoutなし）
+    restoreAllData();
+  }
+
+  // ④ ルールページを構築
+  buildRulesPage();
+
+  // ⑤ タブ・ページ表示切替
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
-  const map={setup:0,honest:1,olympic:2};
+  const map={setup:0,honest:1,olympic:2,rules:3};
   document.querySelectorAll('.tab')[map[p]].classList.add('active');
+  currentPage=p;
+}
+
+// 現在のDOMから全データをstateに保存
+function saveStateFromDOM(){
+  // スコア
+  members.forEach(m=>{
+    for(let h=1;h<=18;h++){
+      const el=document.querySelector(`input[data-member="${m.id}"][data-hole="${h}"]`);
+      if(el && el.value){
+        hjScores[m.id]=hjScores[m.id]||{};
+        hjScores[m.id][h]=+el.value;
+      }
+    }
+  });
+  // PAR
+  for(let h=1;h<=18;h++){
+    const el=document.getElementById('par_h'+h);
+    if(el && el.value) PAR[h-1]=+el.value||PAR[h-1];
+  }
+  // オリンピックポイント
+  members.forEach(m=>{
+    const el=document.querySelector(`input[data-olympic-id="${m.id}"]`);
+    if(el) olympicData[m.id]={pts:+el.value||0};
+  });
+  // ニアピン・ドラコン受賞者名
+  const npH=+document.getElementById('npHoles').value||4;
+  const dcH=+document.getElementById('dcHoles').value||4;
+  const np=[],dc=[];
+  for(let i=1;i<=npH;i++){ const el=document.getElementById(`np_name_${i}`); if(el) np.push(el.value); else np.push(npDcNames.np[i-1]||''); }
+  for(let i=1;i<=dcH;i++){ const el=document.getElementById(`dc_name_${i}`); if(el) dc.push(el.value); else dc.push(npDcNames.dc[i-1]||''); }
+  npDcNames={np,dc};
+}
+
+// メンバー設定テーブルのDOM→state同期
+function syncMembersFromDOM(){
+  const rows=document.getElementById('membersTbody').querySelectorAll('tr');
+  if(rows.length===0) return;
+  rows.forEach((tr,i)=>{
+    if(!members[i]) return;
+    const ins=tr.querySelectorAll('input,select');
+    members[i].name=ins[0].value.trim()||`メンバー${i+1}`;
+    members[i].group=+ins[1].value;
+    members[i].declared=+ins[2].value||90;
+  });
+}
+
+// 保存済みデータをDOMに復元
+function restoreAllData(){
+  // PAR復元
+  PAR.forEach((p,i)=>{
+    const el=document.getElementById('par_h'+(i+1));
+    if(el) el.value=p;
+  });
+  // スコア復元
+  members.forEach(m=>{
+    if(!hjScores[m.id] || Object.keys(hjScores[m.id]).length===0) return;
+    let hasAny=false;
+    for(let h=1;h<=18;h++){
+      if(!hjScores[m.id][h]) continue;
+      const el=document.querySelector(`input[data-member="${m.id}"][data-hole="${h}"]`);
+      if(el){ el.value=hjScores[m.id][h]; hasAny=true; }
+    }
+    if(hasAny) updateHjRow(m.id);
+  });
+  // オリンピックポイント復元
+  members.forEach(m=>{
+    if(!olympicData[m.id]) return;
+    const el=document.querySelector(`input[data-olympic-id="${m.id}"]`);
+    if(el) el.value=olympicData[m.id].pts||0;
+  });
+  renderOlympicRanking();
 }
 
 // ============================================================
@@ -374,7 +471,12 @@ function addMember(){
   members.push({id:'M'+mc, name:'', group:1, declared:90});
   renderMembers();
 }
-function removeMember(id){ members=members.filter(m=>m.id!==id); renderMembers(); }
+function removeMember(id){
+  members=members.filter(m=>m.id!==id);
+  delete hjScores[id];
+  delete olympicData[id];
+  renderMembers();
+}
 function renderMembers(){
   const tb=document.getElementById('membersTbody');
   tb.innerHTML='';
@@ -393,68 +495,8 @@ function renderMembers(){
   });
 }
 function applySetup(){
-  const rows=document.getElementById('membersTbody').querySelectorAll('tr');
-  rows.forEach((tr,i)=>{
-    const ins=tr.querySelectorAll('input,select');
-    members[i].name=ins[0].value.trim()||`メンバー${i+1}`;
-    members[i].group=+ins[1].value;
-    members[i].declared=+ins[2].value||90;
-  });
+  syncMembersFromDOM();
   if(members.length===0){alert('メンバーを追加してください');return;}
-
-  // ① 現在のDOMからスコアを保存
-  members.forEach(m=>{
-    for(let h=1;h<=18;h++){
-      const el=document.querySelector(`input[data-member="${m.id}"][data-hole="${h}"]`);
-      if(el && el.value){
-        hjScores[m.id]=hjScores[m.id]||{};
-        hjScores[m.id][h]=+el.value;
-      }
-    }
-  });
-
-  // ② 現在のPARを保存
-  const savedPar=[...PAR];
-
-  // ③ ページ再構築
-  buildHonestPage();
-  buildOlympicPage();
-
-  // ④ DOM再構築後にスコア・PAR・オリンピックポイントを復元
-  setTimeout(()=>{
-    // PARを復元
-    savedPar.forEach((p,i)=>{
-      const el=document.getElementById('par_h'+(i+1));
-      if(el) el.value=p;
-    });
-    PAR=[...savedPar];
-
-    // 各メンバーのスコアをdata-member/data-hole属性で正確に特定して復元
-    members.forEach(m=>{
-      if(!hjScores[m.id] || Object.keys(hjScores[m.id]).length===0) return;
-      let hasAnyScore=false;
-      for(let h=1;h<=18;h++){
-        if(!hjScores[m.id][h]) continue;
-        const el=document.querySelector(
-          'input[data-member="'+m.id+'"][data-hole="'+h+'"]'
-        );
-        if(el){
-          el.value=hjScores[m.id][h];
-          hasAnyScore=true;
-        }
-      }
-      if(hasAnyScore) updateHjRow(m.id);
-    });
-
-    // オリンピックポイントを復元
-    members.slice().forEach(m=>{
-      if(!olympicData[m.id]) return;
-      const el=document.querySelector('input[data-olympic-id="'+m.id+'"]');
-      if(el) el.value=olympicData[m.id].pts||0;
-    });
-    renderOlympicRanking();
-  },150);
-
   showPage('honest');
 }
 
@@ -660,28 +702,37 @@ function renderHjRanking(){
   const complete=rows.filter(r=>r.complete);
   if(complete.length===0){ div.innerHTML=''; return; }
 
-  // オーバー組（diff>=0）：罰金少ない順 → 順位対象
-  const overRows=complete.filter(r=>r.diff>=0).sort((a,b)=>a.cost-b.cost);
-  // アンダー組（diff<0）：対象外 → 一番下にグレー表示
-  const underRows=complete.filter(r=>r.diff<0).sort((a,b)=>b.diff-a.diff);
+  // 罰金ランキング：±0 → オーバー小さい順 → アンダー |diff| 小さい順（下位）
+  // 同じ誤差ならグロス昇順でタイブレーク
+  const fullRanking=[...complete].sort((a,b)=>{
+    const catA=a.diff===0?0:a.diff>0?1:2;
+    const catB=b.diff===0?0:b.diff>0?1:2;
+    if(catA!==catB) return catA-catB;
+    if(catA===1){
+      if(a.diff!==b.diff) return a.diff-b.diff;
+      return a.total-b.total;
+    }
+    if(catA===2){
+      if(Math.abs(a.diff)!==Math.abs(b.diff)) return Math.abs(a.diff)-Math.abs(b.diff);
+      return a.total-b.total;
+    }
+    return a.total-b.total; // both ±0: gross tiebreak
+  });
 
-  // 特別賞・順位対象はオーバー組のみ
-  const eligible=overRows;
-
-  // 同点按分計算（同じcostの人をグループ化し、該当順位の賞金を按分）
+  // 賞金計算：誤差が同じ→グロス昇順で順位決定、グロスも同じ場合のみ按分
   const prizes=[getRaw('prize1'),getRaw('prize2'),getRaw('prize3')];
   const prizeMap=new Map();
   let pos=0;
-  while(pos<eligible.length){
-    const currentCost=eligible[pos].cost;
+  while(pos<fullRanking.length){
+    const cur=fullRanking[pos];
     let groupEnd=pos;
-    while(groupEnd<eligible.length && eligible[groupEnd].cost===currentCost) groupEnd++;
+    while(groupEnd<fullRanking.length && fullRanking[groupEnd].diff===cur.diff && fullRanking[groupEnd].total===cur.total) groupEnd++;
     const groupSize=groupEnd-pos;
     let totalPrize=0;
     for(let r=pos;r<groupEnd;r++){ if(r<prizes.length) totalPrize+=prizes[r]; }
     const splitPrize=groupSize>0?Math.floor(totalPrize/groupSize):0;
     for(let r=pos;r<groupEnd;r++){
-      prizeMap.set(eligible[r].member.id, {prize:splitPrize, splitCount:groupSize, rankStart:pos+1});
+      prizeMap.set(fullRanking[r].member.id, {prize:splitPrize, splitCount:groupSize, rankStart:pos+1});
     }
     pos=groupEnd;
   }
@@ -703,12 +754,12 @@ function renderHjRanking(){
       <th>調整後</th><th>誤差</th><th>賞金(VND)</th><th>罰金(VND)</th>
     </tr></thead><tbody>`;
 
-  // 順位対象（オーバー組）
-  overRows.forEach((r,i)=>{
+  // 全員を罰金ランキング順に表示（順位番号付き）
+  fullRanking.forEach((r,i)=>{
     const diff=r.diff;
     const badgeCls=i<3?'r'+(i+1):'rx';
     const badge=`<span class="rank-badge ${badgeCls}">${i+1}</span>`;
-    const diffColor=diff>0?'#c0392b':'#1a6b3c';
+    const diffColor=diff>0?'#c0392b':diff<0?'#2471a3':'#1a6b3c';
     const diffStr=diff>0?`+${diff}打`:diff<0?`${diff}打`:'±0';
     const costStr=r.cost>0?`-${fmt(r.cost)}`:'±0';
     const pm=prizeMap.get(r.member.id);
@@ -717,25 +768,12 @@ function renderHjRanking(){
       prizeStr=`<span style="color:var(--green);font-weight:700">+${fmt(pm.prize)}</span>`;
       if(pm.splitCount>1) prizeStr+=`<span style="font-size:0.7rem;color:var(--gray);display:block">(${pm.splitCount}名按分)</span>`;
     }
-    html+=`<tr>
-      <td>${badge}</td><td><strong>${r.member.name}</strong></td>
+    html+=`<tr${diff<0?' style="background:#f9f9f7"':''}>
+      <td>${badge}</td><td><strong>${r.member.name}</strong>${diff<0?' <span style="color:#aaa;font-size:0.75rem">※アンダー</span>':''}</td>
       <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
       <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${diffStr}</td>
       <td style="font-size:1.0rem">${prizeStr}</td>
       <td style="color:${diffColor};font-weight:700;font-size:1.0rem">${costStr}</td>
-    </tr>`;
-  });
-
-  // アンダー組（対象外だが全員表示）
-  underRows.forEach(r=>{
-    const costStr=r.cost>0?`-${fmt(r.cost)}`:'±0';
-    html+=`<tr style="background:#f9f9f7">
-      <td><span class="rank-badge" style="background:#ddd;color:#999;font-size:0.70rem">―</span></td>
-      <td><strong>${r.member.name}</strong> <span style="color:#aaa;font-size:0.75rem">※対象外</span></td>
-      <td>${r.member.declared}</td><td>${r.total}</td><td>${r.adj}</td>
-      <td style="color:#2471a3;font-weight:700;font-size:1.0rem">${r.diff}打</td>
-      <td>—</td>
-      <td style="color:#2471a3;font-weight:700;font-size:1.0rem">${costStr}</td>
     </tr>`;
   });
 
@@ -746,23 +784,17 @@ function renderHjRanking(){
     const bgSorted=[...complete].sort((a,b)=>a.total-b.total);
     const bestGrossScore=bgSorted[0]?bgSorted[0].total:null;
     const bestGrosGroup=bgSorted.filter(r=>r.total===bestGrossScore);
-    // ブービー・ブービーメーカー：オーバー組のみ対象
-    const eligibleAll=complete.filter(r=>r.diff>=0);
-    const byGross=[...eligibleAll].sort((a,b)=>b.total-a.total);
-    const bmScore=byGross[0]?byGross[0].total:null;
-    const bmGroup=byGross.filter(r=>r.total===bmScore);
-    const afterBm=byGross.filter(r=>r.total!==bmScore);
-    const boScore=afterBm[0]?afterBm[0].total:null;
-    const boGroup=afterBm.filter(r=>r.total===boScore);
+    // ブービー・ブービーメーカー：罰金ランキングの下位で決定
+    const bmPlayer=fullRanking.length>=1?fullRanking[fullRanking.length-1]:null;
+    const boPlayer=fullRanking.length>=2?fullRanking[fullRanking.length-2]:null;
     const p1=getRaw('prize1'),p2=getRaw('prize2'),p3=getRaw('prize3');
     const pBG=getRaw('prizeBG'),pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM');
     const pNP=getRaw('prizeNP'),npH=+document.getElementById('npHoles').value||4;
     const pDC=getRaw('prizeDC'),dcH=+document.getElementById('dcHoles').value||4;
 
-    // ニアピン・ドラコン入力欄の既存値を保持
-    const npNames=[];const dcNames=[];
-    for(let i=1;i<=npH;i++) npNames.push((document.getElementById(`np_name_${i}`)||{}).value||'');
-    for(let i=1;i<=dcH;i++) dcNames.push((document.getElementById(`dc_name_${i}`)||{}).value||'');
+    // ニアピン・ドラコン入力欄の既存値を保持（stateから）
+    const npNames=npDcNames.np||[];
+    const dcNames=npDcNames.dc||[];
 
     html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div>
     <table style="border-collapse:collapse;width:100%"><tbody>`;
@@ -777,15 +809,15 @@ function renderHjRanking(){
         <td style="padding:8px 6px 8px 24px;text-align:right;white-space:nowrap;font-weight:700;vertical-align:middle">+<strong>${fmt(money)}</strong> VND${splitNote?`<br><span style="font-size:0.72rem;color:var(--gray);font-weight:400">${splitNote}</span>`:''}</td>
       </tr>`;
 
-    // 同点按分を反映した1位〜3位表示（賞金がある人だけ表示）
+    // 1位〜3位表示（賞金がある人だけ表示）
     const rankLabels=['pb-1','pb-2','pb-3'];
     const rankNames=['🥇 オネストジョン優勝','🥈 オネストジョン準優勝','🥉 オネストジョン3位'];
-    for(let i=0;i<eligible.length;i++){
-      const pm=prizeMap.get(eligible[i].member.id);
+    for(let i=0;i<fullRanking.length;i++){
+      const pm=prizeMap.get(fullRanking[i].member.id);
       if(!pm || pm.prize<=0) continue;
       const labelIdx=Math.min(i,2);
       const splitNote=pm.splitCount>1?`(${pm.splitCount}名按分)`:'';
-      html+=prizeRow(rankLabels[labelIdx],rankNames[labelIdx],eligible[i].member.name,pm.prize,splitNote);
+      html+=prizeRow(rankLabels[labelIdx],rankNames[labelIdx],fullRanking[i].member.name,pm.prize,splitNote);
     }
     // ベスグロ（同点按分対応）
     if(bestGrosGroup.length>0){
@@ -794,19 +826,19 @@ function renderHjRanking(){
       const bgNote=bestGrosGroup.length>1?`(${bestGrosGroup.length}名按分)`:'';
       html+=prizeRow('pb-bg','🏆 ベスグロ',`${bgNames}（グロス ${bestGrossScore}打）`,bgPrize,bgNote);
     }
-    // ブービー（同点按分対応）
-    if(boGroup.length>0){
-      const boNames=boGroup.map(r=>r.member.name).join('・');
-      const boPrize=Math.floor(pBo/boGroup.length);
-      const boNote=boGroup.length>1?`(${boGroup.length}名按分)`:'';
-      html+=prizeRow('pb-bo','💀 ブービー',`${boNames}（${boScore}打）`,boPrize,boNote);
+    // ブービー（罰金ランキング下から2番目）
+    if(boPlayer){
+      const boRank=fullRanking.length-1;
+      const boDiff=boPlayer.diff;
+      const boDiffStr=boDiff>0?`+${boDiff}打`:boDiff<0?`${boDiff}打`:'±0';
+      html+=prizeRow('pb-bo','💀 ブービー',`${boPlayer.member.name}（誤差 ${boDiffStr} / ${boRank+1}位）`,pBo,'');
     }
-    // ブービーメーカー（同点按分対応）
-    if(bmGroup.length>0){
-      const bmNames=bmGroup.map(r=>r.member.name).join('・');
-      const bmPrize=Math.floor(pBM/bmGroup.length);
-      const bmNote=bmGroup.length>1?`(${bmGroup.length}名按分)`:'';
-      html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${bmNames}（${bmScore}打）`,bmPrize,bmNote);
+    // ブービーメーカー（罰金ランキング最下位）
+    if(bmPlayer){
+      const bmRank=fullRanking.length;
+      const bmDiff=bmPlayer.diff;
+      const bmDiffStr=bmDiff>0?`+${bmDiff}打`:bmDiff<0?`${bmDiff}打`:'±0';
+      html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${bmPlayer.member.name}（誤差 ${bmDiffStr} / ${bmRank}位）`,pBM,'');
     }
 
     // ニアピン（ホール数分の手入力欄）
@@ -935,6 +967,87 @@ function renderOlympicRanking(){
   });
   html+=`</tbody></table></div></div>`;
   div.innerHTML=html;
+}
+
+// ============================================================
+// RULES PAGE
+// ============================================================
+function buildRulesPage(){
+  const div=document.getElementById('rulesContent');
+  if(!div) return;
+  const po=getRaw('pen_over'),pu=getRaw('pen_under'),cap=getRaw('pen_cap');
+  const p1=getRaw('prize1'),p2=getRaw('prize2'),p3=getRaw('prize3');
+  const pBG=getRaw('prizeBG'),pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM');
+  const pNP=getRaw('prizeNP'),npH=+document.getElementById('npHoles').value||4;
+  const pDC=getRaw('prizeDC'),dcH=+document.getElementById('dcHoles').value||4;
+
+  div.innerHTML=`
+  <div class="card">
+    <div class="card-title">オネストジョンのルール</div>
+    <ul style="line-height:2;font-size:0.88rem;padding-left:20px">
+      <li>スタート前に自分の予想スコア（申告スコア）を申告する</li>
+      <li>隠しホール<strong>6ホール</strong>（OUT3・IN3）を当日サイコロで決定</li>
+      <li>隠しホールは実際のスコアに関わらず<strong>パー打数として計算</strong>される</li>
+      <li>調整後スコアと申告スコアの<strong>誤差</strong>で競う</li>
+    </ul>
+  </div>
+
+  <div class="card card-red">
+    <div class="card-title">罰金ルール</div>
+    <table style="border-collapse:collapse;width:100%;max-width:480px;font-size:0.9rem">
+      <tr style="border-bottom:1px solid #eee"><td style="padding:8px 12px">申告より<strong>1打オーバー</strong>ごとに</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--red)">−${fmt(po)} VND</td></tr>
+      <tr style="border-bottom:1px solid #eee"><td style="padding:8px 12px">申告より<strong>1打アンダー</strong>ごとに</td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--blue)">−${fmt(pu)} VND</td></tr>
+      <tr><td style="padding:8px 12px"><strong>罰金上限</strong></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700">−${fmt(cap)} VND</td></tr>
+    </table>
+    <p style="margin-top:10px;font-size:0.82rem;color:var(--gray)">誤差 ±0 が最も優秀（罰金なし）</p>
+  </div>
+
+  <div class="card">
+    <div class="card-title">順位決定ルール</div>
+    <ul style="line-height:2;font-size:0.88rem;padding-left:20px">
+      <li>誤差が小さい順に順位決定（±0 → オーバー小 → オーバー大 → アンダー）</li>
+      <li>同点の場合は<strong>グロスが少ない人が上位</strong></li>
+      <li>グロスも同じ場合は賞金を按分</li>
+    </ul>
+  </div>
+
+  <div class="card card-gold">
+    <div class="card-title">賞金一覧</div>
+    <table style="border-collapse:collapse;width:100%;max-width:560px;font-size:0.9rem">
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px"><span class="pb pb-1">🥇 優勝</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(p1)} VND</td></tr>
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px"><span class="pb pb-2">🥈 準優勝</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(p2)} VND</td></tr>
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px"><span class="pb pb-3">🥉 3位</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(p3)} VND</td></tr>
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px"><span class="pb pb-bg">🏆 ベスグロ</span>　<span style="font-size:0.78rem;color:var(--gray)">グロス最少</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(pBG)} VND</td></tr>
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px"><span class="pb pb-bo">💀 ブービー</span>　<span style="font-size:0.78rem;color:var(--gray)">罰金ランキング下から2番目</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(pBo)} VND</td></tr>
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px"><span class="pb pb-bm">🐢 ブービーメーカー</span>　<span style="font-size:0.78rem;color:var(--gray)">罰金ランキング最下位</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(pBM)} VND</td></tr>
+      <tr style="border-bottom:1px solid #f5e9c0"><td style="padding:8px 12px">📍 ニアピン　<span style="font-size:0.78rem;color:var(--gray)">× ${npH}ホール（該当者なしは0）</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(pNP)} VND / ホール</td></tr>
+      <tr><td style="padding:8px 12px">💨 ドラコン　<span style="font-size:0.78rem;color:var(--gray)">× ${dcH}ホール（該当者なしは0）</span></td>
+        <td style="padding:8px 12px;text-align:right;font-weight:700;color:var(--green)">+${fmt(pDC)} VND / ホール</td></tr>
+    </table>
+  </div>
+
+  <div class="card" style="border-top:4px solid var(--blue)">
+    <div class="card-title" style="color:var(--blue);border-bottom-color:#d6eaf8">オリンピック（全員参加）</div>
+    <ul style="line-height:2;font-size:0.88rem;padding-left:20px">
+      <li>各ホールで獲得したポイントで競う</li>
+      <li>最終得点 ＝（自分のポイント × 他の参加人数）−  他の全員のポイント合計</li>
+      <li><strong>1点 ＝ 5,000 VND</strong> で精算</li>
+    </ul>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:8px">
+    💡 金額は「① メンバー設定」ページの罰金・賞金設定を変更すると、このページの表示も連動して更新されます。
+  </div>`;
 }
 
 // ============================================================
