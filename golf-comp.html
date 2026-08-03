@@ -857,6 +857,7 @@ function renderHjRanking(){
       <td colspan="2" style="padding:8px 6px;vertical-align:top">
         <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pNP)}</strong> VND</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px">${npInputs}</div>
+        <div style="font-size:0.72rem;color:var(--gray);margin-top:6px">※該当者がいないホールは空欄のままにしてください</div>
       </td>
     </tr>`;
 
@@ -877,6 +878,7 @@ function renderHjRanking(){
       <td colspan="2" style="padding:8px 6px;vertical-align:top">
         <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pDC)}</strong> VND</div>
         <div style="display:flex;flex-wrap:wrap;gap:4px">${dcInputs}</div>
+        <div style="font-size:0.72rem;color:var(--gray);margin-top:6px">※該当者がいないホールは空欄のままにしてください</div>
       </td>
     </tr>`;
 
@@ -1086,10 +1088,11 @@ function renderBalanceTable(){
 
   const pNP=data.pNP,pDC=data.pDC;
 
-  let html=`<div style="margin-top:20px"><div class="card-title">個人別収支</div>
+  const thR='text-align:right';
+  let html=`<div style="margin-top:20px;max-width:1100px"><div class="card-title">個人別収支</div>
   <div class="rank-table-wrap"><table class="rank-table" style="font-size:0.82rem"><thead><tr>
-    <th>順位</th><th>名前</th><th>グロス</th><th>調整後</th><th>申告</th><th>誤差</th>
-    <th>罰金</th><th>オネスト賞金</th><th>ニアピン</th><th>ドラコン</th><th>ベスグロ</th><th>合計収支</th>
+    <th>順位</th><th>名前</th><th style="${thR}">グロス</th><th style="${thR}">調整後</th><th style="${thR}">申告</th><th style="${thR}">誤差</th>
+    <th style="${thR}">罰金</th><th style="${thR}">オネスト賞金</th><th style="${thR}">ニアピン</th><th style="${thR}">ドラコン</th><th style="${thR}">ベスグロ</th><th style="${thR}">合計収支</th>
   </tr></thead><tbody>`;
 
   data.results.forEach(r=>{
@@ -1106,14 +1109,14 @@ function renderBalanceTable(){
     html+=`<tr>
       <td style="text-align:center"><span class="rank-badge ${r.rank<=3?'r'+r.rank:'rx'}">${r.rank}</span></td>
       <td><strong>${r.member.name}</strong></td>
-      <td>${r.total}</td><td>${r.adj}</td><td>${r.member.declared}</td>
-      <td style="color:${diffColor};font-weight:700">${diffStr}</td>
-      <td style="white-space:nowrap">${costCell}</td>
-      <td style="white-space:nowrap">${honestCell}</td>
-      <td style="white-space:nowrap">${npCell}</td>
-      <td style="white-space:nowrap">${dcCell}</td>
-      <td style="white-space:nowrap">${bgCell}</td>
-      <td style="white-space:nowrap;font-size:1.05rem;font-weight:700;color:${balColor}">${balStr}</td>
+      <td style="${thR}">${r.total}</td><td style="${thR}">${r.adj}</td><td style="${thR}">${r.member.declared}</td>
+      <td style="color:${diffColor};font-weight:700;${thR}">${diffStr}</td>
+      <td style="white-space:nowrap;${thR}">${costCell}</td>
+      <td style="white-space:nowrap;${thR}">${honestCell}</td>
+      <td style="white-space:nowrap;${thR}">${npCell}</td>
+      <td style="white-space:nowrap;${thR}">${dcCell}</td>
+      <td style="white-space:nowrap;${thR}">${bgCell}</td>
+      <td style="white-space:nowrap;${thR};font-size:1.05rem;font-weight:700;color:${balColor}">${balStr}</td>
     </tr>`;
   });
 
@@ -1132,18 +1135,14 @@ function buildKanjiPage(){
   const pNP=getRaw('prizeNP'),pDC=getRaw('prizeDC');
   const npH=+document.getElementById('npHoles').value||4;
   const dcH=+document.getElementById('dcHoles').value||4;
-  const feeEl=document.getElementById('kanjiPerFee');
-  if(feeEl) kanjiPerFee=getRawEl(feeEl)||kanjiPerFee;
   const perFee=kanjiPerFee;
+  const memberNames=new Set(members.map(m=>m.name.trim()).filter(n=>n));
 
   // 支払い計算
   let payItems=[];
   let payTotal=0;
 
   if(data){
-    // 1-3位
-    const r=data.results;
-    const prizes=[getRaw('prize1'),getRaw('prize2'),getRaw('prize3')];
     const prizeLabels=['1位','2位','3位'];
     for(let i=0;i<Math.min(3,data.fullRanking.length);i++){
       const pm=data.prizeMap.get(data.fullRanking[i].member.id);
@@ -1152,29 +1151,26 @@ function buildKanjiPage(){
         payTotal+=pm.prize;
       }
     }
-    // ブービー
     if(data.boPlayer){
       payItems.push({label:'ブービー',name:data.boPlayer.member.name,amount:pBo});
       payTotal+=pBo;
     }
-    // ブービーメーカー
     if(data.bmPlayer){
       payItems.push({label:'ブービーメーカー',name:data.bmPlayer.member.name,amount:pBM});
       payTotal+=pBM;
     }
-    // ニアピン
+    // ニアピン（空欄・メンバー名と不一致は除外）
     const npArr=data.npArr||[];
     for(let i=0;i<npH;i++){
       const n=(npArr[i]||'').trim();
-      if(n){ payItems.push({label:`ニアピン H${i+1}`,name:n,amount:pNP}); payTotal+=pNP; }
+      if(n&&memberNames.has(n)){ payItems.push({label:`ニアピン H${i+1}`,name:n,amount:pNP}); payTotal+=pNP; }
     }
-    // ドラコン
+    // ドラコン（空欄・メンバー名と不一致は除外）
     const dcArr=data.dcArr||[];
     for(let i=0;i<dcH;i++){
       const n=(dcArr[i]||'').trim();
-      if(n){ payItems.push({label:`ドラコン H${i+1}`,name:n,amount:pDC}); payTotal+=pDC; }
+      if(n&&memberNames.has(n)){ payItems.push({label:`ドラコン H${i+1}`,name:n,amount:pDC}); payTotal+=pDC; }
     }
-    // ベスグロ
     data.bestGrosGroup.forEach(bg=>{
       payItems.push({label:'ベスグロ',name:bg.member.name,amount:data.bgPrizeEach});
       payTotal+=data.bgPrizeEach;
@@ -1185,14 +1181,12 @@ function buildKanjiPage(){
   const memberCount=members.length;
   const feeTotal=perFee*memberCount;
   let penaltyTotal=0;
-  if(data){
-    data.results.forEach(r=>{ penaltyTotal+=r.cost; });
-  }
+  if(data){ data.results.forEach(r=>{ penaltyTotal+=r.cost; }); }
   const incomeTotal=feeTotal+penaltyTotal;
   const balance=incomeTotal-payTotal;
 
   // HTML構築
-  let html=`<div class="setup-grid" style="margin-bottom:20px;align-items:start">`;
+  let html=`<div class="setup-grid" style="margin-bottom:20px;align-items:start;max-width:1000px">`;
 
   // 左側：支払い
   html+=`<div class="card card-red" style="min-height:200px">
@@ -1209,9 +1203,9 @@ function buildKanjiPage(){
         prevSection=section;
       }
       html+=`<tr style="border-bottom:1px solid #f5f5f5">
-        <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem;white-space:nowrap">${item.label}</td>
+        <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem;white-space:nowrap;width:100px">${item.label}</td>
         <td style="padding:6px 4px;font-weight:600;white-space:nowrap">${item.name}</td>
-        <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--red);font-weight:700">-${fmt(item.amount)}</td>
+        <td style="padding:6px 4px 6px 12px;text-align:right;white-space:nowrap;color:var(--red);font-weight:700">-${fmt(item.amount)}</td>
       </tr>`;
     });
     html+=`</table>`;
@@ -1227,26 +1221,23 @@ function buildKanjiPage(){
   html+=`<div class="card" style="border-top:4px solid var(--green);min-height:200px">
     <div class="card-title" style="color:var(--green)">収入</div>
     <table style="border-collapse:collapse;width:100%;font-size:0.85rem">
-    <tr><td colspan="3" style="padding:8px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">参加費（余興費）</td></tr>
+    <tr><td colspan="2" style="padding:8px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">参加費</td></tr>
     <tr style="border-bottom:1px solid #f5f5f5">
-      <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem">1人あたり</td>
-      <td style="padding:6px 4px"><input id="kanjiPerFee" type="text" value="${fmt(perFee)}" oninput="fmtInput(this);buildKanjiPage()" inputmode="numeric"
-        style="width:120px;padding:5px 8px;font-size:0.9rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)"></td>
-      <td style="padding:6px 4px;text-align:right;white-space:nowrap;font-size:0.8rem;color:var(--gray)">× ${memberCount}名</td>
+      <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem;white-space:nowrap;vertical-align:middle">1人あたり
+        <input id="kanjiPerFee" type="text" value="${fmt(perFee)}" oninput="fmtInput(this);onKanjiFeeInput()" inputmode="numeric"
+          style="width:100px;padding:4px 6px;font-size:0.88rem;border:1px solid var(--border);border-radius:4px;background:var(--cream);margin:0 4px">
+        × ${memberCount}名</td>
+      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700" id="kanjiFeeTotal">= ${fmt(feeTotal)}</td>
     </tr>
-    <tr style="border-bottom:1px solid #f5f5f5">
-      <td colspan="2" style="padding:6px 4px;color:var(--gray);font-size:0.8rem">参加費 小計</td>
-      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700">+${fmt(feeTotal)}</td>
-    </tr>
-    <tr><td colspan="3" style="padding:12px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">罰金</td></tr>
+    <tr><td colspan="2" style="padding:12px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">罰金</td></tr>
     <tr>
-      <td colspan="2" style="padding:6px 4px;color:var(--gray);font-size:0.8rem">オネストジョン罰金合算</td>
-      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700">${penaltyTotal>0?'+'+fmt(penaltyTotal):'—'}</td>
+      <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem">罰金合計</td>
+      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700" id="kanjiPenaltyTotal">${penaltyTotal>0?'+'+fmt(penaltyTotal):'—'}</td>
     </tr>
     </table>
     <div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--green);text-align:right">
       <span style="font-size:0.8rem;color:var(--gray)">収入合計</span><br>
-      <span style="font-size:1.6rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)} VND</span>
+      <span id="kanjiIncomeTotal" style="font-size:1.6rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)} VND</span>
     </div>
   </div>`;
 
@@ -1256,9 +1247,9 @@ function buildKanjiPage(){
   const balColor=balance>=0?'var(--green)':'var(--red)';
   const balLabel=balance>=0?'黒字':'赤字';
   const balStr=balance>=0?`+${fmt(balance)}`:`-${fmt(Math.abs(balance))}`;
-  html+=`<div class="card" style="text-align:center;border-top:4px solid ${balance>=0?'var(--green)':'var(--red)'}">
+  html+=`<div class="card" style="text-align:center;max-width:1000px;border-top:4px solid ${balance>=0?'var(--green)':'var(--red)'}">
     <div class="card-title">収支バランス</div>
-    <div style="display:flex;justify-content:center;align-items:center;gap:24px;flex-wrap:wrap;margin:8px 0">
+    <div id="kanjiBalanceArea" style="display:flex;justify-content:center;align-items:center;gap:24px;flex-wrap:wrap;margin:8px 0">
       <div><span style="font-size:0.8rem;color:var(--gray)">収入</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)}</span></div>
       <div style="font-size:1.5rem;color:var(--gray)">−</div>
       <div><span style="font-size:0.8rem;color:var(--gray)">支払い</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--red)">${fmt(payTotal)}</span></div>
@@ -1271,6 +1262,60 @@ function buildKanjiPage(){
   </div>`;
 
   div.innerHTML=html;
+}
+
+// 参加費入力時：金額表示だけ更新（DOM再構築しない）
+function onKanjiFeeInput(){
+  const feeEl=document.getElementById('kanjiPerFee');
+  if(!feeEl) return;
+  kanjiPerFee=getRawEl(feeEl)||kanjiPerFee;
+  const memberCount=members.length;
+  const feeTotal=kanjiPerFee*memberCount;
+
+  // 罰金合計を再計算
+  let penaltyTotal=0;
+  const data=computeFullResults();
+  if(data){ data.results.forEach(r=>{ penaltyTotal+=r.cost; }); }
+  const incomeTotal=feeTotal+penaltyTotal;
+
+  // 支払い合計を再計算（payTotalは変わらないのでDOMから取得不要、dataから再計算）
+  let payTotal=0;
+  if(data){
+    const pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM'),pNP=getRaw('prizeNP'),pDC=getRaw('prizeDC');
+    const npH=+document.getElementById('npHoles').value||4;
+    const dcH=+document.getElementById('dcHoles').value||4;
+    const memberNames=new Set(members.map(m=>m.name.trim()).filter(n=>n));
+    for(let i=0;i<Math.min(3,data.fullRanking.length);i++){
+      const pm=data.prizeMap.get(data.fullRanking[i].member.id);
+      if(pm&&pm.prize>0) payTotal+=pm.prize;
+    }
+    if(data.boPlayer) payTotal+=pBo;
+    if(data.bmPlayer) payTotal+=pBM;
+    (data.npArr||[]).slice(0,npH).forEach(n=>{ if(n&&n.trim()&&memberNames.has(n.trim())) payTotal+=pNP; });
+    (data.dcArr||[]).slice(0,dcH).forEach(n=>{ if(n&&n.trim()&&memberNames.has(n.trim())) payTotal+=pDC; });
+    data.bestGrosGroup.forEach(()=>{ payTotal+=data.bgPrizeEach; });
+  }
+
+  const balance=incomeTotal-payTotal;
+  const balColor=balance>=0?'var(--green)':'var(--red)';
+  const balLabel=balance>=0?'黒字':'赤字';
+  const balStr=balance>=0?`+${fmt(balance)}`:`-${fmt(Math.abs(balance))}`;
+
+  // DOM部分更新のみ
+  const ftEl=document.getElementById('kanjiFeeTotal');
+  if(ftEl) ftEl.textContent=`= ${fmt(feeTotal)}`;
+  const itEl=document.getElementById('kanjiIncomeTotal');
+  if(itEl) itEl.textContent=`+${fmt(incomeTotal)} VND`;
+  const baEl=document.getElementById('kanjiBalanceArea');
+  if(baEl) baEl.innerHTML=`
+    <div><span style="font-size:0.8rem;color:var(--gray)">収入</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)}</span></div>
+    <div style="font-size:1.5rem;color:var(--gray)">−</div>
+    <div><span style="font-size:0.8rem;color:var(--gray)">支払い</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--red)">${fmt(payTotal)}</span></div>
+    <div style="font-size:1.5rem;color:var(--gray)">=</div>
+    <div><span style="font-size:0.8rem;color:var(--gray)">差額</span><br>
+      <span style="font-size:2.2rem;font-weight:700;color:${balColor}">${balStr} VND</span><br>
+      <span style="font-size:0.9rem;font-weight:700;color:${balColor}">（${balLabel}）</span>
+    </div>`;
 }
 
 function getRawEl(el){ return parseInt((el.value||'').replace(/,/g,''),10)||0; }
