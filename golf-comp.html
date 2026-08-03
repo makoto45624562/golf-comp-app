@@ -211,6 +211,7 @@
   <button class="tab" onclick="showPage('honest')">② オネストジョン</button>
   <button class="tab" onclick="showPage('olympic')">③ オリンピック</button>
   <button class="tab" onclick="showPage('rules')">④ ルール</button>
+  <button class="tab" onclick="showPage('kanji')">⑤ 幹事収支</button>
 </div>
 
 <main>
@@ -312,6 +313,11 @@
   <div id="rulesContent"></div>
 </div>
 
+<!-- ===== KANJI (幹事収支) ===== -->
+<div id="page-kanji" class="page">
+  <div id="kanjiContent"></div>
+</div>
+
 </main>
 
 <script>
@@ -326,6 +332,7 @@ let npDcNames = { np: [], dc: [] };
 let mc = 0;
 let currentPage = 'setup';
 let pagesBuilt = false;
+let kanjiPerFee = 150000;
 
 let PAR = [4,3,4,5,4,3,4,5,4, 4,3,4,5,4,3,4,5,4];
 
@@ -363,14 +370,15 @@ function showPage(p){
     restoreAllData();
   }
 
-  // ④ ルールページを構築
+  // ④ ルール・幹事ページを構築
   buildRulesPage();
+  buildKanjiPage();
 
   // ⑤ タブ・ページ表示切替
   document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active'));
   document.getElementById('page-'+p).classList.add('active');
-  const map={setup:0,honest:1,olympic:2,rules:3};
+  const map={setup:0,honest:1,olympic:2,rules:3,kanji:4};
   document.querySelectorAll('.tab')[map[p]].classList.add('active');
   currentPage=p;
 }
@@ -797,19 +805,19 @@ function renderHjRanking(){
     const dcNames=npDcNames.dc||[];
 
     html+=`<div style="margin-top:20px"><div class="card-title">特別賞</div>
-    <table style="border-collapse:collapse;width:100%"><tbody>`;
+    <table style="border-collapse:collapse;width:auto"><tbody>`;
 
-    // table形式の賞行ヘルパー
+    // table形式の賞行ヘルパー（レイアウト修正版）
     const prizeRow=(badgeCls,label,name,money,splitNote)=>
       `<tr style="border-bottom:1px solid #eee">
-        <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:middle">
-          <span class="pb ${badgeCls}" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem">${label}</span>
+        <td style="padding:8px 6px;text-align:center;vertical-align:middle;white-space:nowrap">
+          <span class="pb ${badgeCls}" style="display:inline-block;min-width:160px;text-align:center;font-size:0.85rem">${label}</span>
         </td>
-        <td style="width:160px;padding:8px 6px;font-weight:700;font-size:1rem;vertical-align:middle">${name}</td>
-        <td style="padding:8px 6px 8px 24px;text-align:right;white-space:nowrap;font-weight:700;vertical-align:middle">+<strong>${fmt(money)}</strong> VND${splitNote?`<br><span style="font-size:0.72rem;color:var(--gray);font-weight:400">${splitNote}</span>`:''}</td>
+        <td style="padding:8px 6px;font-weight:700;font-size:0.85rem;vertical-align:middle;white-space:nowrap">${name}</td>
+        <td style="width:180px;padding:8px 6px 8px 12px;text-align:right;white-space:nowrap;font-weight:700;vertical-align:middle;color:var(--green)">+${fmt(money)} VND${splitNote?`<br><span style="font-size:0.72rem;color:var(--gray);font-weight:400">${splitNote}</span>`:''}</td>
       </tr>`;
 
-    // 1位〜3位表示（賞金がある人だけ表示）
+    // ① 1位〜3位表示
     const rankLabels=['pb-1','pb-2','pb-3'];
     const rankNames=['🥇 オネストジョン優勝','🥈 オネストジョン準優勝','🥉 オネストジョン3位'];
     for(let i=0;i<fullRanking.length;i++){
@@ -819,73 +827,78 @@ function renderHjRanking(){
       const splitNote=pm.splitCount>1?`(${pm.splitCount}名按分)`:'';
       html+=prizeRow(rankLabels[labelIdx],rankNames[labelIdx],fullRanking[i].member.name,pm.prize,splitNote);
     }
-    // ベスグロ（同点按分対応）
+    // ④ ブービー（罰金ランキング下から2番目）
+    if(boPlayer){
+      const boDiff=boPlayer.diff;
+      const boDiffStr=boDiff>0?`+${boDiff}打`:boDiff<0?`${boDiff}打`:'±0';
+      html+=prizeRow('pb-bo','💀 ブービー',`${boPlayer.member.name}（誤差 ${boDiffStr} / ${fullRanking.length-1+1}位）`,pBo,'');
+    }
+    // ⑤ ブービーメーカー（罰金ランキング最下位）
+    if(bmPlayer){
+      const bmDiff=bmPlayer.diff;
+      const bmDiffStr=bmDiff>0?`+${bmDiff}打`:bmDiff<0?`${bmDiff}打`:'±0';
+      html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${bmPlayer.member.name}（誤差 ${bmDiffStr} / ${fullRanking.length}位）`,pBM,'');
+    }
+
+    // ⑥ ニアピン（ホール数分の手入力欄）
+    let npInputs='';
+    for(let i=1;i<=npH;i++){
+      npInputs+=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.82rem;margin-right:8px">
+        <span style="color:var(--gray)">H${i}:</span>
+        <input id="np_name_${i}" type="text" placeholder="受賞者名" value="${(npNames[i-1]||'').replace(/"/g,'&quot;')}"
+          oninput="npDcNames.np[${i-1}]=this.value;renderBalanceTable()"
+          style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
+      </span>`;
+    }
+    html+=`<tr style="border-bottom:1px solid #eee">
+      <td style="padding:8px 6px;text-align:center;vertical-align:top;white-space:nowrap">
+        <span class="pb" style="display:inline-block;min-width:160px;text-align:center;font-size:0.85rem;background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span>
+      </td>
+      <td colspan="2" style="padding:8px 6px;vertical-align:top">
+        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pNP)}</strong> VND</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${npInputs}</div>
+      </td>
+    </tr>`;
+
+    // ⑦ ドラコン（ホール数分の手入力欄）
+    let dcInputs='';
+    for(let i=1;i<=dcH;i++){
+      dcInputs+=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.82rem;margin-right:8px">
+        <span style="color:var(--gray)">H${i}:</span>
+        <input id="dc_name_${i}" type="text" placeholder="受賞者名" value="${(dcNames[i-1]||'').replace(/"/g,'&quot;')}"
+          oninput="npDcNames.dc[${i-1}]=this.value;renderBalanceTable()"
+          style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
+      </span>`;
+    }
+    html+=`<tr style="border-bottom:1px solid #eee">
+      <td style="padding:8px 6px;text-align:center;vertical-align:top;white-space:nowrap">
+        <span class="pb" style="display:inline-block;min-width:160px;text-align:center;font-size:0.85rem;background:#fff3e0;color:#e65100">💨 ドラコン</span>
+      </td>
+      <td colspan="2" style="padding:8px 6px;vertical-align:top">
+        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pDC)}</strong> VND</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${dcInputs}</div>
+      </td>
+    </tr>`;
+
+    // ⑧ ベスグロ（最後に配置）
     if(bestGrosGroup.length>0){
       const bgNames=bestGrosGroup.map(r=>r.member.name).join('・');
       const bgPrize=Math.floor(pBG/bestGrosGroup.length);
       const bgNote=bestGrosGroup.length>1?`(${bestGrosGroup.length}名按分)`:'';
       html+=prizeRow('pb-bg','🏆 ベスグロ',`${bgNames}（グロス ${bestGrossScore}打）`,bgPrize,bgNote);
     }
-    // ブービー（罰金ランキング下から2番目）
-    if(boPlayer){
-      const boRank=fullRanking.length-1;
-      const boDiff=boPlayer.diff;
-      const boDiffStr=boDiff>0?`+${boDiff}打`:boDiff<0?`${boDiff}打`:'±0';
-      html+=prizeRow('pb-bo','💀 ブービー',`${boPlayer.member.name}（誤差 ${boDiffStr} / ${boRank+1}位）`,pBo,'');
-    }
-    // ブービーメーカー（罰金ランキング最下位）
-    if(bmPlayer){
-      const bmRank=fullRanking.length;
-      const bmDiff=bmPlayer.diff;
-      const bmDiffStr=bmDiff>0?`+${bmDiff}打`:bmDiff<0?`${bmDiff}打`:'±0';
-      html+=prizeRow('pb-bm','🐢 ブービーメーカー',`${bmPlayer.member.name}（誤差 ${bmDiffStr} / ${bmRank}位）`,pBM,'');
-    }
-
-    // ニアピン（ホール数分の手入力欄）
-    let npInputs='';
-    for(let i=1;i<=npH;i++){
-      npInputs+=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.82rem;margin-right:8px">
-        <span style="color:var(--gray)">H${i}:</span>
-        <input id="np_name_${i}" type="text" placeholder="受賞者名" value="${npNames[i-1]||''}"
-          style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
-      </span>`;
-    }
-    html+=`<tr style="border-bottom:1px solid #eee">
-      <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:top">
-        <span class="pb" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem;background:#e8f0fe;color:#1a3a8f">📍 ニアピン</span>
-      </td>
-      <td style="padding:8px 6px;vertical-align:top">
-        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pNP)}</strong> VND</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">${npInputs}</div>
-      </td>
-      <td></td>
-    </tr>`;
-
-    // ドラコン（ホール数分の手入力欄）
-    let dcInputs='';
-    for(let i=1;i<=dcH;i++){
-      dcInputs+=`<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.82rem;margin-right:8px">
-        <span style="color:var(--gray)">H${i}:</span>
-        <input id="dc_name_${i}" type="text" placeholder="受賞者名" value="${dcNames[i-1]||''}"
-          style="width:100px;padding:4px 8px;font-size:0.85rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)">
-      </span>`;
-    }
-    html+=`<tr>
-      <td style="width:200px;padding:8px 6px;text-align:center;vertical-align:top">
-        <span class="pb" style="display:inline-block;width:190px;text-align:center;font-size:0.85rem;background:#fff3e0;color:#e65100">💨 ドラコン</span>
-      </td>
-      <td style="padding:8px 6px;vertical-align:top">
-        <div style="font-size:0.8rem;color:var(--gray);margin-bottom:6px">1ホール +<strong>${fmt(pDC)}</strong> VND</div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px">${dcInputs}</div>
-      </td>
-      <td></td>
-    </tr>`;
 
     html+=`</tbody></table></div>`;
   }
 
+  // 個人別収支テーブル用エリア
+  html+=`<div id="hjBalanceArea"></div>`;
+
   html+=`</div>`;
   div.innerHTML=html;
+
+  // 個人別収支テーブルを描画
+  if(allDone) renderBalanceTable();
 }
 
 // ============================================================
@@ -968,6 +981,299 @@ function renderOlympicRanking(){
   html+=`</tbody></table></div></div>`;
   div.innerHTML=html;
 }
+
+// ============================================================
+// BALANCE TABLE (個人別収支)
+// ============================================================
+function computeFullResults(){
+  getParFromInputs();
+  const hidden=[...hjHidden.out,...hjHidden.in];
+  const po=getRaw('pen_over'),pu=getRaw('pen_under'),cap=getRaw('pen_cap');
+  const pBG=getRaw('prizeBG'),pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM');
+  const pNP=getRaw('prizeNP'),pDC=getRaw('prizeDC');
+  const npH=+document.getElementById('npHoles').value||4;
+  const dcH=+document.getElementById('dcHoles').value||4;
+
+  const rows=members.map(m=>{
+    const s=hjScores[m.id]||{};
+    let total=0,adj=0,complete=true;
+    for(let h=1;h<=18;h++){
+      if(!s[h]) complete=false;
+      total+=s[h]||0;
+      adj+=hidden.includes(h)?PAR[h-1]:(s[h]||0);
+    }
+    const diff=adj-(m.declared||0);
+    let cost=0;
+    if(diff>0) cost=Math.min(diff*po,cap);
+    else if(diff<0) cost=Math.min(Math.abs(diff)*pu,cap);
+    return {member:m,total,adj,diff,cost,complete};
+  });
+  const complete=rows.filter(r=>r.complete);
+  if(complete.length!==members.length) return null;
+
+  // ランキング
+  const fullRanking=[...complete].sort((a,b)=>{
+    const catA=a.diff===0?0:a.diff>0?1:2;
+    const catB=b.diff===0?0:b.diff>0?1:2;
+    if(catA!==catB) return catA-catB;
+    if(catA===1){ if(a.diff!==b.diff) return a.diff-b.diff; return a.total-b.total; }
+    if(catA===2){ if(Math.abs(a.diff)!==Math.abs(b.diff)) return Math.abs(a.diff)-Math.abs(b.diff); return a.total-b.total; }
+    return a.total-b.total;
+  });
+
+  // 賞金
+  const prizes=[getRaw('prize1'),getRaw('prize2'),getRaw('prize3')];
+  const prizeMap=new Map();
+  let pos=0;
+  while(pos<fullRanking.length){
+    const cur=fullRanking[pos];
+    let ge=pos;
+    while(ge<fullRanking.length && fullRanking[ge].diff===cur.diff && fullRanking[ge].total===cur.total) ge++;
+    const gs=ge-pos;
+    let tp=0;
+    for(let r=pos;r<ge;r++){if(r<prizes.length) tp+=prizes[r];}
+    const sp=gs>0?Math.floor(tp/gs):0;
+    for(let r=pos;r<ge;r++) prizeMap.set(fullRanking[r].member.id,{prize:sp,splitCount:gs});
+    pos=ge;
+  }
+
+  // ブービー・ブービーメーカー
+  const bmPlayer=fullRanking.length>=1?fullRanking[fullRanking.length-1]:null;
+  const boPlayer=fullRanking.length>=2?fullRanking[fullRanking.length-2]:null;
+
+  // ベスグロ
+  const bgSorted=[...complete].sort((a,b)=>a.total-b.total);
+  const bestGross=bgSorted[0]?bgSorted[0].total:null;
+  const bestGrosGroup=bgSorted.filter(r=>r.total===bestGross);
+  const bgPrizeEach=bestGrosGroup.length>0?Math.floor(pBG/bestGrosGroup.length):0;
+  const bgIds=new Set(bestGrosGroup.map(r=>r.member.id));
+
+  // NP/DC名前マッチング
+  const npArr=npDcNames.np||[];
+  const dcArr=npDcNames.dc||[];
+  const npCount={},dcCount={};
+  members.forEach(m=>{
+    const name=m.name.trim();
+    if(!name) return;
+    npCount[m.id]=npArr.filter(n=>n.trim()&&n.trim()===name).length;
+    dcCount[m.id]=dcArr.filter(n=>n.trim()&&n.trim()===name).length;
+  });
+
+  // 個人別結果
+  const results=fullRanking.map((r,i)=>{
+    const mid=r.member.id;
+    const honestPrize=(prizeMap.get(mid)||{}).prize||0;
+    let specialPrize=0;
+    if(boPlayer&&boPlayer.member.id===mid) specialPrize+=pBo;
+    if(bmPlayer&&bmPlayer.member.id===mid) specialPrize+=pBM;
+    const npPrize=(npCount[mid]||0)*pNP;
+    const dcPrize=(dcCount[mid]||0)*pDC;
+    const bgPrize=bgIds.has(mid)?bgPrizeEach:0;
+    const totalIncome=honestPrize+specialPrize+npPrize+dcPrize+bgPrize;
+    const balance=totalIncome-r.cost;
+    return {rank:i+1,...r,honestPrize,specialPrize,npPrize,dcPrize,bgPrize,totalIncome,balance};
+  });
+
+  return {fullRanking,prizeMap,bmPlayer,boPlayer,bestGrosGroup,bgPrizeEach,bgIds,results,npCount,dcCount,
+    pBo,pBM,pBG,pNP,pDC,npH,dcH,npArr,dcArr};
+}
+
+function renderBalanceTable(){
+  const div=document.getElementById('hjBalanceArea');
+  if(!div) return;
+  const data=computeFullResults();
+  if(!data){div.innerHTML='';return;}
+
+  const pNP=data.pNP,pDC=data.pDC;
+
+  let html=`<div style="margin-top:20px"><div class="card-title">個人別収支</div>
+  <div class="rank-table-wrap"><table class="rank-table" style="font-size:0.82rem"><thead><tr>
+    <th>順位</th><th>名前</th><th>グロス</th><th>調整後</th><th>申告</th><th>誤差</th>
+    <th>罰金</th><th>オネスト賞金</th><th>ニアピン</th><th>ドラコン</th><th>ベスグロ</th><th>合計収支</th>
+  </tr></thead><tbody>`;
+
+  data.results.forEach(r=>{
+    const diffColor=r.diff>0?'#c0392b':r.diff<0?'#2471a3':'#1a6b3c';
+    const diffStr=r.diff>0?`+${r.diff}`:r.diff<0?`${r.diff}`:'±0';
+    const costCell=r.cost>0?`<span style="color:var(--red)">-${fmt(r.cost)}</span>`:'—';
+    const honestCell=(r.honestPrize+r.specialPrize)>0?`<span style="color:var(--green)">+${fmt(r.honestPrize+r.specialPrize)}</span>`:'—';
+    const npCell=r.npPrize>0?`<span style="color:var(--green)">+${fmt(r.npPrize)}</span>`:'—';
+    const dcCell=r.dcPrize>0?`<span style="color:var(--green)">+${fmt(r.dcPrize)}</span>`:'—';
+    const bgCell=r.bgPrize>0?`<span style="color:var(--green)">+${fmt(r.bgPrize)}</span>`:'—';
+    const balColor=r.balance>0?'var(--green)':r.balance<0?'var(--red)':'var(--gray)';
+    const balStr=r.balance>0?`+${fmt(r.balance)}`:r.balance<0?`-${fmt(Math.abs(r.balance))}`:'±0';
+
+    html+=`<tr>
+      <td style="text-align:center"><span class="rank-badge ${r.rank<=3?'r'+r.rank:'rx'}">${r.rank}</span></td>
+      <td><strong>${r.member.name}</strong></td>
+      <td>${r.total}</td><td>${r.adj}</td><td>${r.member.declared}</td>
+      <td style="color:${diffColor};font-weight:700">${diffStr}</td>
+      <td style="white-space:nowrap">${costCell}</td>
+      <td style="white-space:nowrap">${honestCell}</td>
+      <td style="white-space:nowrap">${npCell}</td>
+      <td style="white-space:nowrap">${dcCell}</td>
+      <td style="white-space:nowrap">${bgCell}</td>
+      <td style="white-space:nowrap;font-size:1.05rem;font-weight:700;color:${balColor}">${balStr}</td>
+    </tr>`;
+  });
+
+  html+=`</tbody></table></div></div>`;
+  div.innerHTML=html;
+}
+
+// ============================================================
+// KANJI PAGE (幹事収支)
+// ============================================================
+function buildKanjiPage(){
+  const div=document.getElementById('kanjiContent');
+  if(!div) return;
+  const data=computeFullResults();
+  const pBG=getRaw('prizeBG'),pBo=getRaw('prizeBooby'),pBM=getRaw('prizeBM');
+  const pNP=getRaw('prizeNP'),pDC=getRaw('prizeDC');
+  const npH=+document.getElementById('npHoles').value||4;
+  const dcH=+document.getElementById('dcHoles').value||4;
+  const feeEl=document.getElementById('kanjiPerFee');
+  if(feeEl) kanjiPerFee=getRawEl(feeEl)||kanjiPerFee;
+  const perFee=kanjiPerFee;
+
+  // 支払い計算
+  let payItems=[];
+  let payTotal=0;
+
+  if(data){
+    // 1-3位
+    const r=data.results;
+    const prizes=[getRaw('prize1'),getRaw('prize2'),getRaw('prize3')];
+    const prizeLabels=['1位','2位','3位'];
+    for(let i=0;i<Math.min(3,data.fullRanking.length);i++){
+      const pm=data.prizeMap.get(data.fullRanking[i].member.id);
+      if(pm&&pm.prize>0){
+        payItems.push({label:prizeLabels[i],name:data.fullRanking[i].member.name,amount:pm.prize});
+        payTotal+=pm.prize;
+      }
+    }
+    // ブービー
+    if(data.boPlayer){
+      payItems.push({label:'ブービー',name:data.boPlayer.member.name,amount:pBo});
+      payTotal+=pBo;
+    }
+    // ブービーメーカー
+    if(data.bmPlayer){
+      payItems.push({label:'ブービーメーカー',name:data.bmPlayer.member.name,amount:pBM});
+      payTotal+=pBM;
+    }
+    // ニアピン
+    const npArr=data.npArr||[];
+    for(let i=0;i<npH;i++){
+      const n=(npArr[i]||'').trim();
+      if(n){ payItems.push({label:`ニアピン H${i+1}`,name:n,amount:pNP}); payTotal+=pNP; }
+    }
+    // ドラコン
+    const dcArr=data.dcArr||[];
+    for(let i=0;i<dcH;i++){
+      const n=(dcArr[i]||'').trim();
+      if(n){ payItems.push({label:`ドラコン H${i+1}`,name:n,amount:pDC}); payTotal+=pDC; }
+    }
+    // ベスグロ
+    data.bestGrosGroup.forEach(bg=>{
+      payItems.push({label:'ベスグロ',name:bg.member.name,amount:data.bgPrizeEach});
+      payTotal+=data.bgPrizeEach;
+    });
+  }
+
+  // 収入計算
+  const memberCount=members.length;
+  const feeTotal=perFee*memberCount;
+  let penaltyTotal=0;
+  if(data){
+    data.results.forEach(r=>{ penaltyTotal+=r.cost; });
+  }
+  const incomeTotal=feeTotal+penaltyTotal;
+  const balance=incomeTotal-payTotal;
+
+  // HTML構築
+  let html=`<div class="setup-grid" style="margin-bottom:20px;align-items:start">`;
+
+  // 左側：支払い
+  html+=`<div class="card card-red" style="min-height:200px">
+    <div class="card-title">支払い（支出）</div>`;
+  if(payItems.length>0){
+    html+=`<table style="border-collapse:collapse;width:100%;font-size:0.85rem">`;
+    let prevSection='';
+    payItems.forEach(item=>{
+      let section='';
+      if(['1位','2位','3位','ブービー','ブービーメーカー'].includes(item.label)) section='オネストジョン';
+      else section='ニアピン・ドラコン・ベスグロ';
+      if(section!==prevSection){
+        html+=`<tr><td colspan="3" style="padding:8px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">${section}</td></tr>`;
+        prevSection=section;
+      }
+      html+=`<tr style="border-bottom:1px solid #f5f5f5">
+        <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem;white-space:nowrap">${item.label}</td>
+        <td style="padding:6px 4px;font-weight:600;white-space:nowrap">${item.name}</td>
+        <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--red);font-weight:700">-${fmt(item.amount)}</td>
+      </tr>`;
+    });
+    html+=`</table>`;
+  } else {
+    html+=`<p style="color:var(--gray);font-size:0.85rem;padding:12px 0">データが揃うと自動表示されます</p>`;
+  }
+  html+=`<div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--red);text-align:right">
+    <span style="font-size:0.8rem;color:var(--gray)">支払い合計</span><br>
+    <span style="font-size:1.6rem;font-weight:700;color:var(--red)">-${fmt(payTotal)} VND</span>
+  </div></div>`;
+
+  // 右側：収入
+  html+=`<div class="card" style="border-top:4px solid var(--green);min-height:200px">
+    <div class="card-title" style="color:var(--green)">収入</div>
+    <table style="border-collapse:collapse;width:100%;font-size:0.85rem">
+    <tr><td colspan="3" style="padding:8px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">参加費（余興費）</td></tr>
+    <tr style="border-bottom:1px solid #f5f5f5">
+      <td style="padding:6px 4px;color:var(--gray);font-size:0.8rem">1人あたり</td>
+      <td style="padding:6px 4px"><input id="kanjiPerFee" type="text" value="${fmt(perFee)}" oninput="fmtInput(this);buildKanjiPage()" inputmode="numeric"
+        style="width:120px;padding:5px 8px;font-size:0.9rem;border:1px solid var(--border);border-radius:4px;background:var(--cream)"></td>
+      <td style="padding:6px 4px;text-align:right;white-space:nowrap;font-size:0.8rem;color:var(--gray)">× ${memberCount}名</td>
+    </tr>
+    <tr style="border-bottom:1px solid #f5f5f5">
+      <td colspan="2" style="padding:6px 4px;color:var(--gray);font-size:0.8rem">参加費 小計</td>
+      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700">+${fmt(feeTotal)}</td>
+    </tr>
+    <tr><td colspan="3" style="padding:12px 4px 4px;font-size:0.72rem;font-weight:700;color:var(--gray);letter-spacing:1px;border-bottom:1px solid #eee">罰金</td></tr>
+    <tr>
+      <td colspan="2" style="padding:6px 4px;color:var(--gray);font-size:0.8rem">オネストジョン罰金合算</td>
+      <td style="padding:6px 4px;text-align:right;white-space:nowrap;color:var(--green);font-weight:700">${penaltyTotal>0?'+'+fmt(penaltyTotal):'—'}</td>
+    </tr>
+    </table>
+    <div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--green);text-align:right">
+      <span style="font-size:0.8rem;color:var(--gray)">収入合計</span><br>
+      <span style="font-size:1.6rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)} VND</span>
+    </div>
+  </div>`;
+
+  html+=`</div>`;
+
+  // 下部：収支バランス
+  const balColor=balance>=0?'var(--green)':'var(--red)';
+  const balLabel=balance>=0?'黒字':'赤字';
+  const balStr=balance>=0?`+${fmt(balance)}`:`-${fmt(Math.abs(balance))}`;
+  html+=`<div class="card" style="text-align:center;border-top:4px solid ${balance>=0?'var(--green)':'var(--red)'}">
+    <div class="card-title">収支バランス</div>
+    <div style="display:flex;justify-content:center;align-items:center;gap:24px;flex-wrap:wrap;margin:8px 0">
+      <div><span style="font-size:0.8rem;color:var(--gray)">収入</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--green)">+${fmt(incomeTotal)}</span></div>
+      <div style="font-size:1.5rem;color:var(--gray)">−</div>
+      <div><span style="font-size:0.8rem;color:var(--gray)">支払い</span><br><span style="font-size:1.2rem;font-weight:700;color:var(--red)">${fmt(payTotal)}</span></div>
+      <div style="font-size:1.5rem;color:var(--gray)">=</div>
+      <div><span style="font-size:0.8rem;color:var(--gray)">差額</span><br>
+        <span style="font-size:2.2rem;font-weight:700;color:${balColor}">${balStr} VND</span><br>
+        <span style="font-size:0.9rem;font-weight:700;color:${balColor}">（${balLabel}）</span>
+      </div>
+    </div>
+  </div>`;
+
+  div.innerHTML=html;
+}
+
+function getRawEl(el){ return parseInt((el.value||'').replace(/,/g,''),10)||0; }
 
 // ============================================================
 // RULES PAGE
